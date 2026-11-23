@@ -1,0 +1,11 @@
+// Cloudflare deploy config: the built game (dist/) served as static assets by a Worker.
+// Step 2 adds a Worker script and a Durable Object per room to this same project.
+// Build first (`npm run build`), then `npx wrangler deploy`.
+{
+  "name": "djhermann",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

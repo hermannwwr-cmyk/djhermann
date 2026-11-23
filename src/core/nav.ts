@@ -3,6 +3,8 @@ import type { Nav, Screen, ScreenId, ScreenParams } from './types';
 export interface NavController extends Nav {
   /** Register a screen. The factory runs on the first visit. */
   register<K extends ScreenId>(id: K, factory: () => Screen<ScreenParams[K]>): void;
+  /** Called after every screen change with the new screen's id. */
+  onChange(fn: (id: ScreenId) => void): () => void;
 }
 
 const LEAVE_MS = 260;
@@ -16,6 +18,7 @@ export function createNav(root: HTMLElement): NavController {
   const factories = new Map<ScreenId, () => Screen<never>>();
   const screens = new Map<ScreenId, Screen<never>>();
   const history: { id: ScreenId; params: unknown }[] = [];
+  const listeners = new Set<(id: ScreenId) => void>();
   let current: ScreenId | null = null;
   let currentScreen: Screen<never> | null = null;
 
@@ -62,6 +65,7 @@ export function createNav(root: HTMLElement): NavController {
     } catch (err) {
       console.error(`[nav] enter("${id}") threw`, err);
     }
+    for (const fn of [...listeners]) fn(id);
   }
 
   function back(): void {
@@ -99,6 +103,12 @@ export function createNav(root: HTMLElement): NavController {
     },
     register(id, factory) {
       factories.set(id, factory as () => Screen<never>);
+    },
+    onChange(fn) {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
     },
     go(id: ScreenId, ...params: unknown[]) {
       const p = params[0];
