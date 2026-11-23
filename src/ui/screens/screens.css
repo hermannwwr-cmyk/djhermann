@@ -1,0 +1,652 @@
+/*
+ * Menus and overlays (title, home, setup, library, settings, calibrate, how-to, results, loading
+ * overlay, track picker, ambient backdrop). Every class is prefixed sc-.
+ * Builds on the tokens and the ui-* primitives in src/styles.
+ */
+
+/* ───────────────────────────── screen frame ───────────────────────────── */
+
+.sc-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+  color: var(--ink);
+  container-type: inline-size;
+  overflow: hidden;
+}
+
+/* top bar of a sub-screen: back button, title, optional action on the right */
+.sc-top {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 60px;
+  padding: 0 var(--s-3);
+}
+
+.sc-top__title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--fs-16);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-top__spacer {
+  flex: none;
+  width: 44px;
+}
+
+/* the scrolling middle of a screen */
+.sc-body {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  padding: var(--s-2) var(--s-4) var(--s-8);
+}
+
+/* soft fade where content scrolls under the top bar / the bottom bar */
+.sc-body--fade {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+}
+
+/* fixed action bar at the bottom of a screen */
+.sc-foot {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4) calc(var(--s-4) + var(--safe-bottom));
+}
+
+.sc-foot--row {
+  flex-direction: row;
+}
+
+.sc-foot--row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sc-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.sc-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: 24px;
+}
+
+.sc-h {
+  font-size: var(--fs-11);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.sc-note {
+  font-size: var(--fs-13);
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.sc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 var(--s-2);
+  margin: -4px calc(-1 * var(--s-2));
+  border-radius: var(--r-sm);
+  color: var(--cyan);
+  font-size: var(--fs-11);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sc-link:active {
+  background: rgba(45, 226, 255, 0.12);
+}
+
+.sc-link .ui-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.sc-link[disabled] {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ───────────────────────────── ambient backdrop ───────────────────────────── */
+
+.sc-ambient {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: radial-gradient(130% 90% at 50% 0%, #0d0b1e 0%, var(--bg-1) 55%, var(--bg-0) 100%);
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.sc-ambient--on {
+  opacity: 1;
+}
+
+.sc-ambient__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* keeps the middle of the screen calm so text always wins */
+.sc-ambient__shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5, 5, 11, 0) 0%, rgba(5, 5, 11, 0.38) 38%, rgba(5, 5, 11, 0.5) 70%, rgba(5, 5, 11, 0.3) 100%),
+    radial-gradient(120% 70% at 50% 50%, transparent 40%, rgba(3, 3, 8, 0.55) 100%);
+}
+
+/* ───────────────────────────── title ───────────────────────────── */
+
+.sc-title {
+  --tt: min(150cqw, 84cqh, 700px);
+  align-items: center;
+}
+
+/* stage light: three beams that cross behind the logo and land on the deck */
+.sc-title__beams {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sc-title__beam {
+  position: absolute;
+  top: -12%;
+  left: 50%;
+  width: 46%;
+  height: 92%;
+  margin-left: -23%;
+  transform-origin: 50% 0;
+  -webkit-clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%);
+  clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%);
+  opacity: 0.62;
+  filter: blur(9px);
+  animation: sc-beam-sway 11s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.sc-title__beam:nth-child(1) {
+  --from: -34deg;
+  --to: -20deg;
+  left: 8%;
+  background: linear-gradient(180deg, rgba(45, 226, 255, 0.5), rgba(45, 226, 255, 0.1) 55%, transparent 92%);
+}
+
+.sc-title__beam:nth-child(2) {
+  --from: 4deg;
+  --to: -7deg;
+  width: 38%;
+  margin-left: -19%;
+  background: linear-gradient(180deg, rgba(139, 108, 255, 0.46), rgba(139, 108, 255, 0.1) 55%, transparent 92%);
+  animation-duration: 14s;
+}
+
+.sc-title__beam:nth-child(3) {
+  --from: 34deg;
+  --to: 21deg;
+  left: 92%;
+  background: linear-gradient(180deg, rgba(255, 79, 168, 0.5), rgba(255, 79, 168, 0.1) 55%, transparent 92%);
+  animation-duration: 9s;
+}
+
+@keyframes sc-beam-sway {
+  from {
+    transform: rotate(var(--from));
+  }
+  to {
+    transform: rotate(var(--to));
+  }
+}
+
+/* the turntable: a square plane tilted away from the viewer and turned a little, built in layers */
+.sc-title__deck {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: var(--tt);
+  height: var(--tt);
+  margin: calc(-0.5 * var(--tt)) 0 0 calc(-0.5 * var(--tt));
+  perspective: 1300px;
+  perspective-origin: 50% 34%;
+  pointer-events: none;
+}
+
+.sc-tt {
+  position: absolute;
+  inset: 0;
+  transform: rotateX(56deg) rotateZ(-17deg);
+  transform-style: preserve-3d;
+}
+
+.sc-tt > * {
+  position: absolute;
+}
+
+/* the deck's faceplate */
+.sc-tt__plinth {
+  inset: 4% -12% 2% -10%;
+  border-radius: 4.5%;
+  background:
+    radial-gradient(52% 52% at 46% 50%, rgba(139, 108, 255, 0.2), transparent 72%),
+    linear-gradient(160deg, #262635 0%, #171721 42%, #0d0d14 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.1),
+    inset 0 3px 0 rgba(255, 255, 255, 0.14),
+    0 30px 80px rgba(0, 0, 0, 0.7);
+}
+
+.sc-tt__rim,
+.sc-tt__platter,
+.sc-tt__record,
+.sc-tt__sheen,
+.sc-tt__glow {
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+}
+
+/* the platter's side: a stack of discs gives it real thickness */
+.sc-tt__rim,
+.sc-tt__platter {
+  width: 77%;
+  height: 77%;
+  margin: -38.5% 0 0 -38.5%;
+}
+
+.sc-tt__rim {
+  background: #0b0b11;
+  box-shadow:
+    0 0 0 1px rgba(160, 160, 190, 0.26),
+    0 16px 30px rgba(0, 0, 0, 0.5);
+}
+
+.sc-tt__platter {
+  transform: translateZ(14px);
+}
+
+.sc-tt__record,
+.sc-tt__sheen {
+  width: 72%;
+  height: 72%;
+  margin: -36% 0 0 -36%;
+}
+
+.sc-tt__record {
+  animation: sc-spin-z 1.8s linear infinite;
+  will-change: transform;
+}
+
+.sc-tt canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sc-tt__sheen {
+  animation: sc-sheen 5.5s ease-in-out infinite alternate;
+}
+
+.sc-tt__arm,
+.sc-tt__armshadow {
+  inset: 0;
+}
+
+.sc-tt__arm {
+  transform: translateZ(40px);
+}
+
+.sc-tt__armshadow {
+  transform: translateZ(18px) translate(1.2%, 2.4%);
+  filter: brightness(0) blur(5px);
+  opacity: 0.6;
+}
+
+/* a pool of coloured light on the deck around the platter */
+.sc-tt__glow {
+  width: 104%;
+  height: 104%;
+  margin: -52% 0 0 -52%;
+  transform: translateZ(1px);
+  background: conic-gradient(
+    from 200deg,
+    rgba(45, 226, 255, 0.6),
+    rgba(139, 108, 255, 0.5),
+    rgba(255, 79, 168, 0.6),
+    rgba(139, 108, 255, 0.35),
+    rgba(45, 226, 255, 0.6)
+  );
+  -webkit-mask-image: radial-gradient(closest-side, transparent 70%, #000 76%, transparent 100%);
+  mask-image: radial-gradient(closest-side, transparent 70%, #000 76%, transparent 100%);
+  animation: sc-breathe 3.2s ease-in-out infinite alternate;
+}
+
+@keyframes sc-spin-z {
+  from {
+    transform: translateZ(16px) rotate(0deg);
+  }
+  to {
+    transform: translateZ(16px) rotate(360deg);
+  }
+}
+
+@keyframes sc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sc-sheen {
+  from {
+    opacity: 0.78;
+    transform: translateZ(17px) rotate(-5deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(17px) rotate(6deg);
+  }
+}
+
+@keyframes sc-breathe {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 0.85;
+  }
+}
+
+/* haze over the far edge of the deck, darkness under the text at the bottom */
+.sc-title__fade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(8, 7, 18, 0) 34%, rgba(8, 7, 18, 0.55) 47%, rgba(8, 7, 18, 0) 62%),
+    linear-gradient(180deg, transparent 72%, rgba(5, 5, 11, 0.82) 100%);
+}
+
+.sc-title__brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: clamp(28px, 9cqh, 96px);
+  padding: 0 var(--s-4);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* the logo: "DJ" in outline over "HERMANN" in the aurora */
+.sc-logo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.sc-logo__dj {
+  position: relative;
+  font-size: clamp(50px, 19cqw, 96px);
+  letter-spacing: 0.06em;
+  margin-right: -0.06em;
+  /* outline: a thick stroke painted under an opaque fill, which also hides the overlapping
+     contours a variable font would otherwise show inside the letters */
+  color: #0b0a1c;
+  -webkit-text-stroke: 5px var(--ink);
+  paint-order: stroke fill;
+  filter: drop-shadow(0 0 14px rgba(139, 108, 255, 0.75));
+}
+
+.sc-logo__name {
+  position: relative;
+  font-size: clamp(40px, 12.7cqw, 64px);
+  margin-top: 0.1em;
+  background: var(--aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* a second copy in the reversed gradient fades in and out: the colour drifts, nothing repaints */
+.sc-logo__name::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, var(--pink) 0%, #ffcf9a 48%, var(--cyan) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  opacity: 0;
+  animation: sc-logo-shift 7s ease-in-out infinite alternate;
+}
+
+/* the glow behind the name */
+.sc-logo__name::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: blur(16px);
+  opacity: 0.75;
+  animation: sc-logo-glow 1s ease-out infinite;
+}
+
+@keyframes sc-logo-shift {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  80%,
+  100% {
+    opacity: 0.9;
+  }
+}
+
+/* one soft pulse per beat at 120 bpm */
+@keyframes sc-logo-glow {
+  0% {
+    opacity: 0.95;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+}
+
+.sc-title__tag {
+  margin-top: var(--s-4);
+  font-size: clamp(9px, 2.75cqw, 11px);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.sc-title__tag i {
+  font-style: normal;
+  color: var(--ink-4);
+  margin: 0 0.5em;
+}
+
+/* the whole screen is the button */
+.sc-title__tap {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  padding: 0 var(--s-4) calc(clamp(52px, 11cqh, 104px) + var(--safe-bottom));
+  outline-offset: -6px;
+}
+
+.sc-title__cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: 56px;
+  padding: 0 var(--s-8);
+  border-radius: var(--r-pill);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--fs-14);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: rgba(10, 8, 22, 0.72);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.2),
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 10px 40px rgba(0, 0, 0, 0.6);
+  animation: sc-cta 1.6s ease-in-out infinite;
+}
+
+/* aurora ring around the pill */
+.sc-title__cta::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: var(--aurora);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+.sc-title__cta::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow:
+    0 0 18px rgba(139, 108, 255, 0.7),
+    0 0 44px rgba(139, 108, 255, 0.35);
+  animation: sc-breathe 1.6s ease-in-out infinite alternate;
+}
+
+.sc-title__cta .ui-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--cyan);
+}
+
+.sc-title__cta .ui-icon svg {
+  fill: currentColor;
+}
+
+@keyframes sc-cta {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+.sc-title__tap:active .sc-title__cta {
+  animation: none;
+  transform: scale(0.96);
+  filter: brightness(1.3);
+}
+
+.sc-title__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 20px;
+  font-size: var(--fs-12);
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.sc-title__hint .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.sc-title--busy .sc-title__cta {
+  animation: none;
+  opacity: 0.8;
+}
+
+.sc-title--error .sc-title__hint {
+  color: var(--amber);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-tt__record,
+  .sc-tt__sheen,
+  .sc-tt__glow,
+  .sc-title__beam,
+  .sc-title__cta,
+  .sc-title__cta::after,
+  .sc-logo__name::after,
+  .sc-logo__name::before {
+    animation: none;
+  }
+}
+
+/* end of screens.css */
