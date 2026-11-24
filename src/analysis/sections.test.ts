@@ -64,6 +64,21 @@ describe('estimateSections', () => {
     expect(brk.energy).toBeLessThan(0.5);
   });
 
+  test('bar loudness measured on a built-in track (groove nearly as loud as the drop)', () => {
+    // energy.bar of "Northbound Signal" from src/music, analysed on its catalog grid;
+    // exact: intro 0+8, groove 8+8, build 16+4, drop 20+16, break 36+8, build 44+4, drop 48+8, outro 56+8
+    const bar = [0.78, 0.78, 0.78, 0.78, 0.82, 0.83, 0.83, 0.85, 0.94, 0.93, 0.92, 0.94, 0.95, 0.94, 0.93, 0.95, 0.97, 0.96, 0.93, 0.74, 1.00, 0.99, 1.00, 1.00, 1.00, 0.99, 1.00, 0.98, 1.00, 0.99, 1.00, 1.00, 1.00, 0.99, 1.00, 0.99, 0.43, 0.40, 0.40, 0.43, 0.68, 0.66, 0.67, 0.66, 0.95, 0.95, 0.92, 0.76, 1.00, 0.99, 1.00, 1.00, 1.00, 0.99, 1.00, 0.98, 0.94, 0.93, 0.90, 0.85, 0.80, 0.80, 0.80, 0.80, 0.50];
+    const s = estimateSections(energyOf(bar));
+    console.log('[sections] built-in:', describeSections(s));
+    expectTiling(s, bar.length);
+    expect(kindAt(s, 0)).toBe('intro');
+    expect(kindAt(s, 10)).toBe('groove');
+    for (const b of [20, 28, 35, 48, 55]) expect(kindAt(s, b)).toBe('drop');
+    expect(kindAt(s, 37)).toBe('break');
+    expect(kindAt(s, 46)).toBe('build');
+    expect(kindAt(s, 60)).toBe('outro');
+  });
+
   test('a flat track is one groove', () => {
     const bar = fill(40, (i) => 0.8 + 0.02 * Math.sin(i));
     const s = estimateSections(energyOf(bar));

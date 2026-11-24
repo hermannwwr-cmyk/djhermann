@@ -9,8 +9,12 @@ import { percentile } from './dsp';
 /** Sections are made of blocks this many bars long. */
 const BLOCK_BARS = 4;
 /** Bar loudness relative to the loud parts: at or above this is a drop, below QUIET is quiet. */
-const LOUD = 0.88;
+const LOUD = 0.95;
 const QUIET = 0.62;
+/** Blocks of the same level whose loudness differs by less than this (relative) are one run. */
+const MERGE = 0.07;
+/** A rise or fall in relative loudness smaller than this does not count. */
+const RISE = 0.03;
 /** A track whose quiet bars are this close to its loud bars has no structure worth labelling. */
 const FLAT = 0.12;
 
@@ -57,7 +61,7 @@ export function estimateSections(energy: BeatEnergy): TrackSection[] {
     }
   }
 
-  // classify blocks and merge neighbours of the same level into runs
+  // classify blocks and merge neighbours of the same level and about the same loudness into runs
   const runs: Run[] = [];
   for (let start = offset === 0 ? 0 : offset - BLOCK_BARS; start < bars; start += BLOCK_BARS) {
     const from = Math.max(0, start);
@@ -66,7 +70,9 @@ export function estimateSections(energy: BeatEnergy): TrackSection[] {
     const level: Level = rel >= LOUD ? 'loud' : rel < QUIET ? 'quiet' : 'mid';
     const last = runs[runs.length - 1];
     const sliver = to - from < BLOCK_BARS;
-    if (last && (last.level === level || (sliver && to === bars))) last.bars += to - from;
+    const similar =
+      last && last.level === level && (level === 'loud' || Math.abs(rel - mean(bar, last.start, last.start + last.bars) / top) < MERGE);
+    if (last && (similar || (sliver && to === bars))) last.bars += to - from;
     else runs.push({ start: from, bars: to - from, level, kind: 'groove' });
   }
   // a pickup of fewer than four bars joins what follows
@@ -76,17 +82,39 @@ export function estimateSections(energy: BeatEnergy): TrackSection[] {
     runs.shift();
   }
 
-  const hasLoud = runs.some((r) => r.level === 'loud');
+  const level = (r: Run): number => mean(bar, r.start, r.start + r.bars) / top;
+  let lastDrop = -1;
+  let firstDrop = -1;
   runs.forEach((run, i) => {
-    const firstRun = i === 0;
-    const lastRun = i === runs.length - 1;
+    if (run.level === 'loud') {
+      lastDrop = i;
+      if (firstDrop < 0) firstDrop = i;
+    }
+  });
+  // the tail after the last drop is the outro when it only winds down (and is not too long)
+  let outroFrom = runs.length;
+  if (lastDrop >= 0) {
+    let tail = 0;
+    for (let i = lastDrop + 1; i < runs.length; i++) tail += runs[i].bars;
+    if (tail > 0 && tail <= 24) outroFrom = lastDrop + 1;
+  } else if (runs.length > 1 && level(runs[runs.length - 1]) < level(runs[runs.length - 2]) - RISE) {
+    outroFrom = runs.length - 1;
+  }
+  runs.forEach((run, i) => {
     if (run.level === 'loud') run.kind = 'drop';
-    else if (firstRun && !lastRun && (run.level === 'quiet' || (hasLoud && run.bars <= 16 && runs[1].level !== 'quiet')))
-      run.kind = 'intro';
-    else if (lastRun && !firstRun && (run.level === 'quiet' || (hasLoud && run.bars <= 16 && runs[i - 1].level === 'loud')))
-      run.kind = 'outro';
+    else if (i >= outroFrom) run.kind = 'outro';
+    else if (i === 0 && runs.length > 1 && (run.level === 'quiet' || level(run) < level(runs[1]) - RISE)) run.kind = 'intro';
+    // a quiet stretch before the first drop that follows the intro is still the intro, not a break
+    else if (run.level === 'quiet' && i < firstDrop && runs[i - 1]?.kind === 'intro') run.kind = 'intro';
     else run.kind = run.level === 'quiet' ? 'break' : 'groove';
   });
+  // neighbours with the same label are one section
+  for (let i = runs.length - 1; i > 0; i--) {
+    if (runs[i].kind === runs[i - 1].kind && runs[i].kind !== 'groove') {
+      runs[i - 1].bars += runs[i].bars;
+      runs.splice(i, 1);
+    }
+  }
 
   // the bars that lead into a drop are a build when they rise, or when they follow a quiet part
   const out: TrackSection[] = [];
@@ -94,8 +122,12 @@ export function estimateSections(energy: BeatEnergy): TrackSection[] {
     const next = runs[i + 1];
     if (next && next.kind === 'drop' && run.kind !== 'drop') {
       const end = run.start + run.bars;
-      const rising = mean(bar, end - 2, end) > mean(bar, end - BLOCK_BARS, end - 2) + 0.03;
-      const lead = run.bars >= 16 && mean(bar, end - 4, end) > mean(bar, end - 8, end - 4) + 0.03 ? 8 : BLOCK_BARS;
+      const prev = runs[i - 1];
+      const rising =
+        run.bars >= 2 * BLOCK_BARS
+          ? mean(bar, end - BLOCK_BARS, end) > mean(bar, end - 2 * BLOCK_BARS, end - BLOCK_BARS) + RISE * top
+          : !!prev && prev.kind !== 'drop' && level(run) > level(prev) + RISE;
+      const lead = run.bars >= 16 && mean(bar, end - 4, end) > mean(bar, end - 8, end - 4) + RISE * top ? 8 : BLOCK_BARS;
       const keep = run.bars - lead;
       if ((rising || run.level === 'quiet') && (keep >= BLOCK_BARS || (keep === 0 && i > 0))) {
         if (keep > 0) out.push(section(run.kind, run.start, keep));
