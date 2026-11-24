@@ -1,0 +1,253 @@
+/* The playfield: note highway (canvas) + the four performance pads. Prefix: rh- */
+
+.rh {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg-0);
+  contain: strict;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.rh-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+/* ───────────── pad plate ───────────── */
+
+.rh-pads {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--rh-pad-h, 96px);
+  display: flex;
+  gap: 8px; /* PAD_GAP in layout.ts */
+  padding: 8px 10px 10px; /* side padding = PAD_ROW_PADDING in layout.ts */
+  background:
+    radial-gradient(140% 60% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 70%),
+    var(--hw-plate);
+  box-shadow:
+    inset 0 1px 0 var(--hw-edge),
+    inset 0 2px 0 rgba(0, 0, 0, 0.5),
+    0 -10px 24px rgba(0, 0, 0, 0.55);
+}
+
+/* hairline where the plate meets the road */
+.rh-pads::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  background: var(--aurora);
+  opacity: 0.35;
+}
+
+.rh--compact .rh-pads {
+  padding-top: 6px;
+  padding-bottom: 7px;
+}
+
+/* ───────────── a pad ───────────── */
+
+.rh-pad {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* the light the pad throws onto the plate around it */
+.rh-pad-halo {
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  box-shadow:
+    0 0 14px 2px rgba(var(--rh-rgb), 0.55),
+    0 0 34px 6px rgba(var(--rh-rgb), 0.25);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* the recess in the plate the rubber sits in */
+.rh-pad-well {
+  position: absolute;
+  inset: 0;
+  padding: 3px;
+  border-radius: 13px;
+  background: var(--hw-well);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.85),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* the rubber pad */
+.rh-pad-body {
+  position: relative;
+  height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, 0.07), transparent 60%),
+    linear-gradient(180deg, #2e2e3a 0%, #20202a 55%, #1a1a22 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 3px 0 #07070b,
+    0 5px 8px rgba(0, 0, 0, 0.55);
+  transform: translateY(-1px);
+  transition: transform 170ms var(--ease-spring);
+  will-change: transform;
+}
+
+.rh-pad.is-down .rh-pad-body {
+  transform: translateY(2px) scale(0.965);
+  transition: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 0 0 #07070b,
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* RGB backlight bleeding through the translucent rubber, strongest at the edges */
+.rh-pad-led {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(130% 95% at 50% 120%, rgba(var(--rh-rgb), 0.7), rgba(var(--rh-rgb), 0.18) 58%, rgba(var(--rh-rgb), 0.05) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(var(--rh-rgb), 0.95),
+    inset 0 0 12px rgba(var(--rh-rgb), 0.75);
+  opacity: 0.2;
+  will-change: opacity;
+}
+
+/* the hot white-ish core while the pad is struck */
+.rh-pad-hot {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(85% 75% at 50% 52%, rgba(255, 255, 255, 0.55), rgba(var(--rh-rgb), 0.55) 48%, rgba(var(--rh-rgb), 0.12) 100%);
+  opacity: 0;
+  will-change: opacity;
+}
+
+.rh-pad-face {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--hw-silk);
+}
+
+.rh-pad-icon {
+  display: inline-flex;
+  color: rgba(var(--rh-rgb), 1);
+  transition: color 160ms ease;
+}
+
+.rh-pad-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.1;
+}
+
+.rh-pad.is-down .rh-pad-icon {
+  color: #fff;
+  transition: none;
+}
+
+.rh-pad-label {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: var(--fs-10);
+  line-height: 1;
+  letter-spacing: 0.2em;
+  padding-left: 0.2em;
+  color: var(--hw-silk);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.rh-pad.is-down .rh-pad-label {
+  color: #fff;
+}
+
+/* keyboard hint, only where there is a keyboard and a mouse */
+.rh-pad-key {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  z-index: 2;
+  display: none;
+  min-width: 15px;
+  padding: 2px 3px 1px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: var(--font-ui);
+  font-size: var(--fs-9);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--hw-silk-dim);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rh-pad-key {
+    display: block;
+  }
+}
+
+/* short slot (console drawer open): small icon, label beside nothing else */
+.rh--compact .rh-pad-face {
+  flex-direction: row;
+  gap: 6px;
+}
+
+.rh--compact .rh-pad-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.rh--compact .rh-pad-label {
+  font-size: var(--fs-9);
+  letter-spacing: 0.14em;
+  padding-left: 0;
+}
+
+.rh--compact .rh-pad-key {
+  display: none;
+}
+
+/* tall slot (console closed): big square pads */
+.rh--large .rh-pad-face {
+  gap: 8px;
+}
+
+.rh--large .rh-pad-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.rh--large .rh-pad-label {
+  font-size: var(--fs-11);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rh-pad-body {
+    transition: none;
+  }
+}

@@ -1,6 +1,6 @@
 # DJ Turntable Game: Handoff Brief
 
-Status: **design agreed, no code written yet.** Two decisions are still open (see "Open decisions").
+Status: **step 1 (single-player game) is built and playable.** Platform and host are decided (see "Decisions"). Steps 2 and 3 (multiplayer) are not started.
 
 ## Goal
 
@@ -59,16 +59,10 @@ Also discussed, as a fallback or extra: two players on one device (split lanes, 
 
 Prices and free tiers change, so check them before committing. The user must create the hosting account and connect it to GitHub themselves.
 
-## Open decisions (ask the user)
+## Decisions (confirmed by the user)
 
-1. Phone-browser game (PWA) for now, or a native App Store / Play Store app from the start?
-2. Which host: Cloudflare (recommended) or Render (simplest), or another option?
-
-Recommendation given to the user (not yet confirmed):
-
-- **Platform: phone-browser PWA.** No store review or fees, works on iPhone and Android from one codebase, and friends join with a link and a room code. Web Audio gives sample-accurate scheduling, which is what sync needs. It can be wrapped as a store app later (e.g. Capacitor).
-- **Host: Cloudflare** (Pages for the game, Workers + Durable Objects for rooms). One Durable Object per room is a natural fit: all players in a room talk to the same instance, which also keeps the shared clock. It never sleeps, so there's no cold start in the middle of a party, and the free tier fits a game this size. Render is the fallback if Cloudflare setup is a blocker.
-- **Order:** build step 1 (single-player) first. It needs no server and can go on Cloudflare Pages right away. Add the server in step 2.
+- **Platform: phone-browser PWA.** It installs to the home screen and can be wrapped as a store app later (e.g. Capacitor).
+- **Host: Cloudflare.** Cloudflare now points new projects to Workers with static assets rather than Pages, so `wrangler.jsonc` deploys `dist/` as a Worker's static assets. Step 2 adds a Worker script and one Durable Object per room to the same project. The config was not checked against Cloudflare's docs (they were unreachable from the build session), so check it on the first deploy.
 
 ## Build plan
 
@@ -76,7 +70,40 @@ Recommendation given to the user (not yet confirmed):
 2. Rooms with join codes, plus party mode.
 3. Every-phone-plays mode with clock sync, latency calibration and drift correction.
 
+## Step 1: what exists
+
+Vite + TypeScript, no UI framework (DOM, CSS, Canvas 2D, Web Audio). Every module codes against the contracts in `src/core/types.ts`; `src/app/` wires them together.
+
+| Module | Directory | What it does |
+|---|---|---|
+| Core | `src/core/` | Shared types, beat-grid maths, mixer laws, frame loop, navigation, settings |
+| Audio engine | `src/audio/`, `public/worklets/` | Deck worklet (scratch, motor, CDJ CUE), latency-compensated clock, EQ/filter/echo/limiter, pad sounds |
+| Built-in music | `src/music/` | Six original synthesised tracks (116–128 BPM) and all one-shot sounds, rendered in a Worker |
+| Analysis + library | `src/analysis/`, `src/library/` | BPM/beat-grid detection, waveforms, beat energy, sections; own files kept locally in IndexedDB |
+| Rhythm | `src/game/rhythm/` | Note charts, the note highway and the four pads, judging and combo |
+| Gig | `src/game/gig/` | Missions, transitions with rescues, hype, dead air/trainwreck, scoring, the tutorial, free play |
+| Console | `src/ui/console/` | The realistic decks and mixer, the waveform display |
+| HUD | `src/ui/hud/` | Stage, score/hype top bar, mission line, the control guide, callouts, pause menu |
+| Screens | `src/ui/screens/` | Title, home, setup, My Music (import + beat check), settings, calibration, how-to, results, icons |
+
+Run it: `npm install`, then `npm run dev` (open the printed URL on a phone on the same network, or in a desktop browser at phone size). `npm test` runs the unit tests (367), `npm run build` builds `dist/`. Each module also has a dev harness page under `dev/`.
+
+Deploy: `npm run build`, then `npx wrangler deploy` (needs a Cloudflare account and `wrangler login`), or connect the GitHub repo in the Cloudflare dashboard with build command `npm run build`.
+
+Verified in headless Chromium (desktop CPU, simulated phone screen): the tutorial and a full three-track gig play through the real UI with no errors, following only the on-screen guide; the production build runs and registers its service worker. Measurements for each module are in the commit history.
+
+**Not verified yet (needs a person and real phones):**
+- Nobody has listened to the music or the sounds. The vocal-chop leads are the biggest risk.
+- No real iPhone or Android test: performance, touch feel, the iOS silent-switch workaround, Bluetooth latency.
+- All game timings (mission windows, hype drain, the length of a mix) were tuned against simulated players.
+- Beat detection was only tested on synthetic audio, not real MP3/M4A/FLAC files.
+
+**Known small issues:**
+- The tutorial's pads step can't spotlight the pads (there is no control id for them); it is guided by the status line only.
+- The device back button doesn't close the free-play track picker (it opens the pause menu instead).
+- Long track titles can make some status lines run past the 50 characters the mission line fits.
+
 ## Repo state
 
 - Repo: `hermannwwr-cmyk/djhermann`, dedicated to this game.
-- Only this brief exists so far. No game code has been written.
+- Step 1 is on branch `ccr-dd6f226c-umdp9r`.

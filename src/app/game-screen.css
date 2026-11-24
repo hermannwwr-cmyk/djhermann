@@ -1,0 +1,104 @@
+/* Layout of the game screen: the slots each module's component fills. Prefix: gs- */
+
+.gs {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-1);
+}
+
+.gs-top {
+  position: relative;
+  flex: none;
+  height: calc(104px + var(--safe-top));
+  z-index: 2;
+}
+
+.gs-waves {
+  position: relative;
+  flex: none;
+  height: 60px;
+  z-index: 1;
+}
+
+/* the playfield takes whatever the console leaves */
+.gs-play {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  z-index: 1;
+}
+
+.gs-console {
+  position: relative;
+  flex: none;
+  z-index: 2;
+}
+
+.gs-fill {
+  position: absolute;
+  inset: 0;
+}
+
+.gs-callouts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.gs-guide {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.gs-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.gs-overlay > * {
+  pointer-events: auto;
+}
+
+/* very short screens: give the playfield a little more room */
+@media (max-height: 620px) {
+  .gs-top {
+    height: calc(92px + var(--safe-top));
+  }
+
+  .gs-waves {
+    height: 52px;
+  }
+}
+
+/* phones held sideways: the game is portrait only */
+.app-rotate {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  place-items: center;
+  padding: var(--s-6);
+  background: var(--bg-0);
+  text-align: center;
+}
+
+.app-rotate__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--fs-20);
+  margin-bottom: var(--s-2);
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .app-rotate {
+    display: grid;
+  }
+}

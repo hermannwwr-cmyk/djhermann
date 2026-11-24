@@ -1,0 +1,90 @@
+/**
+ * Lanterns on the Water: 116 BPM, F major. The warm-up track: swung shuffle, congas and a shaker,
+ * a kalimba arpeggio, house-piano chords and a soft "oo / oh" vocal chop. Sunrise on a beach.
+ */
+import { baseMix, chord, defineSong } from './common';
+
+export default defineSong({
+  id: 'lanterns-on-the-water',
+  title: 'Lanterns on the Water',
+  bpm: 116,
+  key: 'F major',
+  art: { hueA: 32, hueB: 332, seed: 11602 },
+  seed: 1160,
+  swing: 0.56,
+  kit: {
+    kick: { fEnd: 49, fMid: 105, fTop: 330, decay: 0.16, click: 0.18, drive: 1.4 },
+    clap: { tone: 1100, tail: 0.07, bright: 0.3, body: 0.35, seed: 31 },
+    hatDecay: 0.02,
+    hatHp: 6500,
+    openDecay: 0.08,
+    snareTune: 0.95,
+    toms: [330, 220],
+    seed: 116,
+  },
+  progression: [
+    chord('F1', 'F3 C4 E4 A4', 'F4 A4 C5 E5'),
+    chord('A1', 'E3 A3 C4 G4', 'E4 A4 C5 E5'),
+    chord('A#1', 'F3 A#3 D4 A4', 'F4 A#4 D5 F5'),
+    chord('C2', 'G3 C4 E4 G4', 'E4 G4 C5 E5'),
+    chord('D2', 'F3 A3 D4 A4', 'D4 F4 A4 D5'),
+    chord('A1', 'E3 A3 C4 G4', 'E4 A4 C5 E5'),
+    chord('A#1', 'F3 A#3 D4 A4', 'F4 A#4 D5 F5'),
+    chord('C2', 'G3 C4 E4 A#4', 'E4 G4 C5 E5'),
+  ],
+  riserNote: 'C5',
+  drums: {
+    hats: 'o . O o | o . O o | o . O o | o . O o',
+    hatsLight: '. . x . | . . x . | . . x . | . . x .',
+    shaker: true,
+    perc: '. . . h | . . l . | . h . . | l . . s',
+    percGain: 0.42,
+    clapGhosts: [15],
+  },
+  bass: {
+    p: { sub: 1, mid: 0.25, shape: 'square', midOct: 1, cutoff: 320, env: 1.2, envDecay: 0.09, q: 0.8, drive: 1.2, release: 0.04 },
+    groove: 'x - - - | - - . . | . . x - | - - . .',
+    drop: 'x - - . | . . x - | . . x - | . . 5 -',
+  },
+  chords: { saw: { detune: 0.009, seed: 51 }, groove: 'x - - - | - - - - | - - - - | - - - -', drop: 'x - - - | - - - - | - - - - | - - - -' },
+  layers: [
+    {
+      name: 'kalimba',
+      inst: { kind: 'mallet', decay: 0.36 },
+      kind: 'arp',
+      pattern: '0 . 2 . | 1 . 3 . | 2 . 0 . | 3 . 1 .',
+      dropPattern: '0 . 2 1 | . 3 . 2 | 4 . 2 . | 3 1 . 2',
+      levels: ['introB', 'groove', 'build', 'drop', 'drop2', 'outroA'],
+      gain: 0.55,
+      transpose: 12,
+      pan: 0.35,
+    },
+    {
+      name: 'piano',
+      inst: { kind: 'keys', p: { bright: 1.1, t1: 1.1, len: 1.1 } },
+      kind: 'block',
+      pattern: 'x - - - | - - - - | . . . x | - - - -',
+      dropPattern: '. . x . | . . . x | . . x . | . . . x',
+      levels: ['groove', 'break', 'drop', 'drop2'],
+      gain: 0.7,
+      voices: 4,
+      pan: 0.25,
+    },
+  ],
+  lead: {
+    voice: {
+      kind: 'vox',
+      p: { scoop: 1.5, refMidi: 72, track: 0.35, breath: 0.07, vib: 0.007, bright: 0.85, decay: 0 },
+      syllables: ['w:oo>oh', 'n:oh', 'h:ah', 'y:oo', 'n:oh>oo', 'w:ah'],
+    },
+    hookA: 'C5 - - A4 | - - C5 - | D5 - C5 - | A4 - - - | . . . . | E5 - - C5 | - - A4 - | G4 - A4 - | . . . . | F5 - - D5 | - - C5 - | D5 - - - | C5 - - - | - - - - | . . G4 - | A4 - C5 -',
+    hookB: 'D5 - - - | - - F5 - | E5 - D5 - | C5 - - - | . . . . | C5 - - E5 | - - D5 - | C5 - A4 - | . . . . | D5 - - F5 | - - E5 - | D5 - C5 - | E5 - - - | - - - - | - - - - | . . . .',
+    pickup: 'C5',
+    teaser: true,
+  },
+  cut: { intro: [500, 1800], groove: 2400, build: [1600, 11000], breakdown: [800, 4000], outro: 700 },
+  mix: baseMix(
+    { chords: { trim: -2 }, pluck: { trim: 2, delay: 0.3 }, lead: { trim: 0, reverb: 0.26 }, tops: { trim: -1 } },
+    { reverb: { decay: 0.76, damping: 0.45, preDelay: 0.025, returnDb: -4.5, duck: 0.4 }, delay: { beats: 0.75, feedback: 0.42, damp: 0.5, returnDb: -9, toReverb: 0.25 }, masterDb: -1.7 },
+  ),
+});

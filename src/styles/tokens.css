@@ -1,0 +1,130 @@
+/*
+ * Design tokens. The look: a dark club at night, lit by one "aurora" gradient
+ * (cyan → violet → pink) with gold as the reward colour. Mirror of src/theme/theme.ts.
+ */
+:root {
+  /* surfaces, darkest to lightest */
+  --bg-0: #05050b;
+  --bg-1: #0a0a14;
+  --bg-2: #11111f;
+  --bg-3: #1a1a2e;
+  --bg-4: #262640;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  /* text */
+  --ink: #f4f3ff;
+  --ink-2: #b9b6d6;
+  --ink-3: #7d7a9c;
+  --ink-4: #4a4866;
+
+  /* the aurora */
+  --cyan: #2de2ff;
+  --violet: #8b6cff;
+  --pink: #ff4fa8;
+  --aurora: linear-gradient(100deg, var(--cyan) 0%, var(--violet) 52%, var(--pink) 100%);
+
+  /* decks */
+  --deck-a: #2de2ff;
+  --deck-b: #ff4fa8;
+  --deck-a-rgb: 45, 226, 255;
+  --deck-b-rgb: 255, 79, 168;
+
+  /* pad lanes, left to right: boom, clap, zap, horn */
+  --lane-0: #2de2ff;
+  --lane-1: #6f8dff;
+  --lane-2: #b86bff;
+  --lane-3: #ff4fa8;
+
+  /* reward + semantics */
+  --gold: #ffcf4a;
+  --gold-hot: #fff3c4;
+  --gold-rgb: 255, 207, 74;
+  --mint: #4dffb5;
+  --amber: #ffa63d;
+  --red: #ff4d5e;
+
+  /* DJ hardware: the console and the pads are drawn as real gear (dark anodised metal, rubber, LEDs) */
+  --hw-plate: linear-gradient(180deg, #1b1b25 0%, #121219 100%); /* faceplate */
+  --hw-plate-flat: #15151d;
+  --hw-well: #08080d; /* recessed slots, fader tracks */
+  --hw-rubber: linear-gradient(180deg, #2b2b35 0%, #1c1c24 100%); /* knob caps, buttons, pads */
+  --hw-rubber-flat: #23232c;
+  --hw-metal: linear-gradient(180deg, #d9d9e4 0%, #8b8b9b 48%, #5d5d6c 52%, #b9b9c8 100%); /* fader caps, spindles */
+  --hw-edge: rgba(255, 255, 255, 0.09); /* top-edge highlight */
+  --hw-silk: rgba(236, 236, 248, 0.78); /* silkscreen legends printed on the plate */
+  --hw-silk-dim: rgba(236, 236, 248, 0.42);
+  --led-green: #3dff7a; /* PLAY, signal present */
+  --led-amber: #ffa63d; /* CUE, hot signal */
+  --led-red: #ff4d5e; /* clip */
+  --led-off: #23232e;
+
+  /* judgments */
+  --j-perfect: var(--gold);
+  --j-great: var(--mint);
+  --j-good: #9fd8ff;
+  --j-miss: var(--red);
+
+  /* type */
+  --font-display: 'Unbounded', 'Manrope', system-ui, sans-serif;
+  --font-ui: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fs-9: 9px;
+  --fs-10: 10px;
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-20: 20px;
+  --fs-24: 24px;
+  --fs-32: 32px;
+  --fs-44: 44px;
+  --fs-64: 64px;
+
+  /* shape + space */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* light */
+  --glow-cyan: 0 0 10px rgba(45, 226, 255, 0.6), 0 0 28px rgba(45, 226, 255, 0.28);
+  --glow-pink: 0 0 10px rgba(255, 79, 168, 0.6), 0 0 28px rgba(255, 79, 168, 0.28);
+  --glow-violet: 0 0 10px rgba(139, 108, 255, 0.6), 0 0 28px rgba(139, 108, 255, 0.28);
+  --glow-gold: 0 0 10px rgba(255, 207, 74, 0.65), 0 0 30px rgba(255, 207, 74, 0.3);
+  --shadow-raise: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 10px 28px rgba(0, 0, 0, 0.55);
+  --shadow-inset: inset 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  --surface: linear-gradient(180deg, #1c1c33 0%, #121222 100%);
+  --surface-raised: linear-gradient(180deg, #2a2a48 0%, #1a1a30 100%);
+
+  /* motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 120ms;
+  --t-med: 220ms;
+  --t-slow: 420ms;
+
+  /* device */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* layers inside the app frame */
+  --z-bg: 0;
+  --z-screen: 10;
+  --z-overlay: 50;
+  --z-sheet: 60;
+  --z-toast: 70;
+}
