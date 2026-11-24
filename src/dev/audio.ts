@@ -43,14 +43,15 @@ await loadFonts();
 const style = document.createElement('style');
 style.textContent = `
   body { background: var(--bg-0); }
-  .aud { max-width: 520px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--ink); font-family: var(--font-ui); }
+  .aud { width: 100%; max-width: 520px; height: 100%; overflow-y: auto; box-sizing: border-box; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--ink); font-family: var(--font-ui); }
   .aud h1 { font-family: var(--font-display); font-weight: 900; font-size: 20px; margin: 0; letter-spacing: .02em; }
-  .aud-card { background: var(--hw-plate); border: 1px solid var(--line); border-radius: 14px; padding: 12px; box-shadow: inset 0 1px 0 var(--hw-edge), 0 8px 24px rgba(0,0,0,.4); }
+  .aud-card, .aud-row, .aud-read { min-width: 0; }
+  .aud-card { overflow: hidden; background: var(--hw-plate); border: 1px solid var(--line); border-radius: 14px; padding: 12px; box-shadow: inset 0 1px 0 var(--hw-edge), 0 8px 24px rgba(0,0,0,.4); }
   .aud-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .aud-deck { border-left: 3px solid var(--c); }
   .aud-title { font-weight: 800; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--c, var(--ink)); margin-bottom: 8px; }
-  .aud-read { font: 600 12px/1.5 ui-monospace, Menlo, monospace; color: var(--ink-2); white-space: pre; overflow-x: auto; }
-  .aud label { font-size: 11px; color: var(--ink-3); display: flex; flex-direction: column; gap: 2px; min-width: 70px; flex: 1; }
+  .aud-read { font: 600 12px/1.5 ui-monospace, Menlo, monospace; color: var(--ink-2); white-space: pre-wrap; }
+  .aud label { font-size: 11px; color: var(--ink-3); display: flex; flex-direction: column; gap: 2px; min-width: 70px; flex: 1 1 70px; }
   .aud input[type=range] { width: 100%; accent-color: var(--c, var(--violet)); }
   .aud-scr { flex: 1; min-width: 120px; height: 44px; border-radius: 10px; background: var(--hw-well); border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 11px; color: var(--ink-3); touch-action: none; user-select: none; }
   .aud-meter { height: 6px; border-radius: 3px; background: var(--hw-well); overflow: hidden; }
@@ -106,7 +107,7 @@ for (const p of ['boom', 'clap', 'zap', 'horn']) button(topRow, p.toUpperCase(),
 const masterRow = el('div', 'aud-row', top);
 slider(masterRow, 'crossfader', -1, 1, -1, (v) => engine.setCrossfader(v));
 slider(masterRow, 'master', 0, 1, 1, (v) => engine.setMasterVolume(v));
-slider(masterRow, 'latency override (ms, 0 = auto)', 0, 300, 0, (v) => engine.setLatencyMs(v > 0 ? v : null));
+slider(masterRow, 'latency ms (0 = auto)', 0, 300, 0, (v) => engine.setLatencyMs(v > 0 ? v : null));
 const masterMeter = el('div', 'aud-meter', top);
 const masterBar = el('i', '', masterMeter);
 const clockRead = el('div', 'aud-read', top);

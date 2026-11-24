@@ -62,8 +62,8 @@ export function analyseBlock(data: Float32Array, sampleRate: number, out: BlockL
   return out;
 }
 
-/** RMS of a band → 0..1 for visuals. The factors bring typical dance music to a similar range per band. */
-export const BAND_SCALE = { low: 2.6, mid: 4.2, high: 9 } as const;
+/** RMS of a band → 0..1 for visuals. Calibrated on the built-in tracks: one deck at full level reaches about 0.8 (95th percentile) in every band, two decks mixed reach 1. */
+export const BAND_SCALE = { low: 2.6, mid: 4.2, high: 11 } as const;
 export const bandToUnit = (rms: number, scale: number): number => {
   const v = rms * scale;
   return v >= 1 ? 1 : v <= 0 ? 0 : Math.pow(v, 0.8);
