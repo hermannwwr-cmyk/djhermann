@@ -2030,7 +2030,7 @@ button.pt-player--empty:active {
 
 .pt-ctl__waitleave {
   position: absolute;
-  z-index: 2;
+  z-index: calc(var(--z-overlay) + 1);
   top: calc(var(--safe-top) + 14px);
   right: var(--s-3);
 }
@@ -2091,4 +2091,14 @@ button.pt-player--empty:active {
   box-shadow:
     inset 0 1px 0 var(--hw-edge),
     0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* the error's title on its own line, the explanation under it */
+.pt-err p {
+  text-wrap: pretty;
+}
+
+.pt-err b {
+  display: block;
+  margin-bottom: 2px;
 }

@@ -13,6 +13,7 @@ import { createBuiltinMusic } from '../music';
 import { createPartyStore } from '../net';
 import { createAmbientBackground, registerScreens } from '../ui/screens';
 import { createGameScreen } from './game-screen';
+import { registerPartyScreens } from '../ui/party';
 
 function div(className: string, parent: HTMLElement): HTMLDivElement {
   const d = document.createElement('div');
@@ -51,13 +52,14 @@ export async function boot(): Promise<void> {
   const ctx: AppContext = { engine, library, settings, nav, party };
 
   registerScreens({ ...ctx, nav });
+  registerPartyScreens({ ...ctx, nav });
   nav.register('game', () => createGameScreen(ctx));
 
   // the menus share one ambient backdrop; the game screen has its own stage
   const ambient = createAmbientBackground();
   bg.appendChild(ambient.el);
   nav.onChange((id) => {
-    if (id === 'game') ambient.stop();
+    if (id === 'game' || id === 'controller') ambient.stop();
     else ambient.start();
   });
 

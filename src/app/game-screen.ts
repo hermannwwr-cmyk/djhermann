@@ -10,6 +10,7 @@ import type { FrameLoop } from '../core/frame';
 import type { AppContext, DeckId, GameParams, GigResults, Screen } from '../core/types';
 import { createGig } from '../game/gig';
 import { createHostLink } from '../net';
+import { createBoardChip } from '../ui/party';
 import type { HostLink } from '../core/party';
 import { createRhythm } from '../game/rhythm';
 import { createConsole, createWaveforms } from '../ui/console';
@@ -76,7 +77,13 @@ function startSession(ctx: AppContext, host: HTMLElement, params: GameParams): S
   const room = params.party ? ctx.party.room : null;
   const hostLink: HostLink | null =
     room && room.role === 'host' ? createHostLink({ room, engine, bus, rhythm, getHud: () => gig.getHud() }) : null;
-  if (hostLink) cleanup.push(loop.add((f) => hostLink.update(f)), () => hostLink.destroy());
+  if (hostLink && room) {
+    cleanup.push(loop.add((f) => hostLink.update(f)), () => hostLink.destroy());
+    const chip = createBoardChip({ getBoard: () => hostLink.getBoard(), myPid: room.pid });
+    chip.el.style.cssText += ';position:absolute;top:10px;right:8px;z-index:3';
+    playSlot.appendChild(chip.el);
+    cleanup.push(loop.add((f) => chip.update(f)), () => chip.destroy());
+  }
 
   const loading = createLoadingOverlay();
   overlay.appendChild(loading.el);
