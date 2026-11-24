@@ -2,7 +2,7 @@
 // Step 2 adds a Worker script and a Durable Object per room to this same project.
 // Build first (`npm run build`), then `npx wrangler deploy`.
 {
-  "name": "dj-hermann-game",
+  "name": "djhermann",
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./dist",
