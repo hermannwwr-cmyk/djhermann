@@ -1,6 +1,6 @@
 # DJ Turntable Game: Handoff Brief
 
-Status: **step 1 (single-player game) is built and playable.** Platform and host are decided (see "Decisions"). Steps 2 and 3 (multiplayer) are not started.
+Status: **step 1 (single-player) is live; step 2 (rooms + party mode) is built and tested locally.** Step 3 (every phone plays) is not started.
 
 ## Goal
 
@@ -102,6 +102,23 @@ Verified in headless Chromium (desktop CPU, simulated phone screen): the tutoria
 - The tutorial's pads step can't spotlight the pads (there is no control id for them); it is guided by the status line only.
 - The device back button doesn't close the free-play track picker (it opens the pause menu instead).
 - Long track titles can make some status lines run past the 50 characters the mission line fits.
+
+## Step 2: rooms + party mode
+
+The host phone runs a normal gig and plays the audio (best into a speaker). Friends open the `?room=CODE` link or tap PARTY MODE and type the 4-letter code; each phone becomes a note highway + pads at its own difficulty, in time with the host's speaker. Their hits move the crowd's hype; everyone sees a live leaderboard. Only timing and game state travel; never audio.
+
+| Part | Where | Notes |
+|---|---|---|
+| Contract | `src/core/party.ts` | HTTP API, wire protocol, client and game-integration interfaces |
+| Server | `worker/` | Worker + one `Room` Durable Object per code (WebSocket Hibernation, SQLite-backed, idle rooms deleted after 15 min). `/api/*` only; the game is still served straight from assets |
+| Client | `src/net/` | Reconnecting room client, NTP-style shared clock, host link (tracks + 12 Hz ticks + board), remote engine (mirrors the host's decks as heard), in-memory test server |
+| Screens | `src/ui/party/` | Party hub, lobby, the player's controller screen, leaderboard chip; party results |
+
+Run it locally: `npm run build && npm run dev:worker` (room server on :8787) and `npm run dev` (Vite proxies `/api` to it). `npm run test:worker` runs the server tests.
+
+Verified: 28 server tests, 419 app tests; client against the real local runtime (wrangler/workerd); a full party in headless Chromium (host + 2 players through the real UI and the real server): players joined by code, followed the host into the gig, and their note highways matched the host's beat to under 0.1 ms on one machine. Simulated 4G links: within about 10 ms.
+
+Not verified: real phones on real networks; the first deploy of the Durable Object to the Cloudflare account; how strongly many players' hits and misses should move the hype (every player's judgments count fully right now).
 
 ## Repo state
 
