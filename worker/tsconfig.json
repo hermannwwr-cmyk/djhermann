@@ -1,0 +1,20 @@
+{
+  // The Worker: Workers runtime types, no DOM. Type-check with `npm run typecheck:worker`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["./**/*.ts"],
+  // Node tooling, not Worker code
+  "exclude": ["vitest.config.ts"]
+}
