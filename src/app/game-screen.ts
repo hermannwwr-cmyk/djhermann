@@ -9,6 +9,8 @@ import { createFrameLoop } from '../core/frame';
 import type { FrameLoop } from '../core/frame';
 import type { AppContext, DeckId, GameParams, GigResults, Screen } from '../core/types';
 import { createGig } from '../game/gig';
+import { createHostLink } from '../net';
+import type { HostLink } from '../core/party';
 import { createRhythm } from '../game/rhythm';
 import { createConsole, createWaveforms } from '../ui/console';
 import { createCallouts, createGuide, createPauseMenu, createTopBar, showCard } from '../ui/hud';
@@ -69,6 +71,12 @@ function startSession(ctx: AppContext, host: HTMLElement, params: GameParams): S
   const rhythm = createRhythm({ engine, bus, settings });
   const gig = createGig({ engine, bus, library, rhythm, settings, params });
   const loop: FrameLoop = createFrameLoop(engine, () => gig.getHud());
+
+  // party mode: this phone is the host; mirror the gig to the players' phones
+  const room = params.party ? ctx.party.room : null;
+  const hostLink: HostLink | null =
+    room && room.role === 'host' ? createHostLink({ room, engine, bus, rhythm, getHud: () => gig.getHud() }) : null;
+  if (hostLink) cleanup.push(loop.add((f) => hostLink.update(f)), () => hostLink.destroy());
 
   const loading = createLoadingOverlay();
   overlay.appendChild(loading.el);
@@ -207,6 +215,7 @@ function startSession(ctx: AppContext, host: HTMLElement, params: GameParams): S
   function finish(results: GigResults): void {
     if (dead || finishing) return;
     finishing = true;
+    hostLink?.finish(results);
     if (results.completed) engine.playSound('cheer', { gain: 0.6 });
     const done = params.tutorial
       ? { title: "YOU'RE READY", subtitle: 'Lesson complete', tone: 'good' as const }
@@ -214,7 +223,7 @@ function startSession(ctx: AppContext, host: HTMLElement, params: GameParams): S
         ? { title: 'SET COMPLETE!', subtitle: 'The crowd wants more', tone: 'good' as const }
         : { title: 'THE CROWD LEFT', subtitle: 'Keep the music going next time', tone: 'bad' as const };
     void showCard(overlay, { ...done, ms: 1600 }).then(() => {
-      if (!dead) nav.go('results', { results, params });
+      if (!dead) nav.go('results', { results, params, ...(hostLink ? { board: hostLink.getBoard() } : {}) });
     });
   }
 
@@ -229,6 +238,7 @@ function startSession(ctx: AppContext, host: HTMLElement, params: GameParams): S
     try {
       await engine.unlock();
       await gig.prepare((p, stage) => loading.set(p, stage));
+      room?.setPhase('playing', params);
     } catch (err) {
       console.error('[game] could not start', err);
       if (!dead) nav.go('home');

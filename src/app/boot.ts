@@ -10,6 +10,7 @@ import { createSettings } from '../core/settings';
 import type { AppContext } from '../core/types';
 import { createLibrary } from '../library';
 import { createBuiltinMusic } from '../music';
+import { createPartyStore } from '../net';
 import { createAmbientBackground, registerScreens } from '../ui/screens';
 import { createGameScreen } from './game-screen';
 
@@ -46,7 +47,8 @@ export async function boot(): Promise<void> {
   const music = createBuiltinMusic();
   const library = createLibrary({ music, sampleRate: engine.sampleRate });
   const nav = createNav(screens);
-  const ctx: AppContext = { engine, library, settings, nav };
+  const party = createPartyStore();
+  const ctx: AppContext = { engine, library, settings, nav, party };
 
   registerScreens({ ...ctx, nav });
   nav.register('game', () => createGameScreen(ctx));
