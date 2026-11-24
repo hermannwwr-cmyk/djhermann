@@ -1,11 +1,25 @@
-// Cloudflare deploy config: the built game (dist/) served as static assets by a Worker.
-// Step 2 adds a Worker script and a Durable Object per room to this same project.
-// Build first (`npm run build`), then `npx wrangler deploy`.
+// Cloudflare deploy config: the Worker `djhermann` = the built game (dist/) as static assets
+// + a small Worker script for /api/* + one Durable Object per multiplayer room.
+// Cloudflare builds: build command `npm run build`, deploy command `npx wrangler deploy`.
+// Local: `npm run build && npm run dev:worker` (http://localhost:8787).
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "djhermann",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // only the API runs the Worker first; the game (and its SPA fallback) is served from assets
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  // SQLite-backed Durable Objects (the only kind the Workers free plan allows)
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  // Pull-request preview builds (`wrangler preview`) need this block. Previews do not get the
+  // Durable Object, so party rooms only work on the production deploy from main.
+  "previews": {}
 }

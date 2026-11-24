@@ -31,6 +31,8 @@ import type {
   TrackMeta,
 } from '../core/types';
 import { createAmbientBackground, createLoadingOverlay, openTrackPicker, registerScreens } from '../ui/screens';
+import { createMockParty } from '../ui/party/mock';
+import { registerPartyScreensWith } from '../ui/party/screens';
 import { createMockEngine } from './mock-engine';
 import type { MockEngine } from './mock-engine';
 import { createMockLibrary, mockMeta, mockTrack } from './mocks';
@@ -344,8 +346,11 @@ async function main(): Promise<void> {
   const library = withUserTracks(createMockLibrary(Number(q.get('delay') ?? 600)), mine);
 
   const nav = createNav(screens);
-  const ctx: AppContext & { nav: typeof nav } = { engine, library, settings, nav };
+  // party mode runs on the pretend party (the party harness, dev/party.html, has the full set of controls)
+  const party = createMockParty({ local: engine });
+  const ctx: AppContext & { nav: typeof nav } = { engine, library, settings, nav, party: party.store };
   registerScreens(ctx);
+  registerPartyScreensWith(ctx, party.net);
   nav.register('game', () => createStubGame(ctx, overlays));
 
   const ambient = createAmbientBackground();

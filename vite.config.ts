@@ -4,7 +4,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   // each dev server can use its own dependency cache (VITE_CACHE_DIR) so parallel servers don't collide
   cacheDir: process.env.VITE_CACHE_DIR ?? 'node_modules/.vite',
-  server: { host: true, port: 5173, strictPort: false },
+  server: {
+    host: true,
+    port: 5173,
+    strictPort: false,
+    // multiplayer API (HTTP + WebSocket) → the Worker under `npm run dev:worker`
+    proxy: { '/api': { target: 'http://localhost:8787', ws: true } },
+  },
   preview: { host: true, port: 4173 },
   build: {
     target: 'es2022',
@@ -39,6 +45,7 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: true,
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],
