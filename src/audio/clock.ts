@@ -93,6 +93,8 @@ export class ClockSync {
 
   private outliers = 0;
   private readonly scratch = new Float64Array(STAIR_N);
+  /** diagnostics: how often the timestamps were given up on, and why */
+  readonly diag = { tsDisagree: 0, tsStale: 0, resets: 0 };
 
   /** true once at least one observation arrived since the last reset */
   get isLocked(): boolean {
@@ -147,6 +149,7 @@ export class ClockSync {
       const err = o - this.offset;
       if (Math.abs(err) > 0.2) {
         if (++this.outliers >= 4) {
+          this.diag.resets++;
           this.reset();
         } else return;
       } else this.outliers = 0;
@@ -200,6 +203,7 @@ export class ClockSync {
         this.lambdaOk = false;
       }
     } else if (this.devOk && this.tsN >= TS_N) {
+      this.diag.tsDisagree++;
       this.dropTimestamps();
     }
     this.update(nowMs);
@@ -213,7 +217,10 @@ export class ClockSync {
 
   private update(nowMs: number): void {
     // timestamps that stopped arriving are no longer evidence of anything
-    if (this.devOk && nowMs - this.lastTsSeenMs > 3000) this.dropTimestamps();
+    if (this.devOk && nowMs - this.lastTsSeenMs > 3000) {
+      this.diag.tsStale++;
+      this.dropTimestamps();
+    }
 
     const dt = this.locked ? Math.min(Math.max((nowMs - this.lastUpdateMs) / 1000, 0), 1) : 0;
     this.lastUpdateMs = nowMs;

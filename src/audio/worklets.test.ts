@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUANTUM, createDeckSim, createLimiterSim } from './worklet-sim';
+import { QUANTUM, createDeckSim, createEchoSim, createLimiterSim } from './worklet-sim';
 import type { WorkletSim } from './worklet-sim';
 
 const SR = 48000;
@@ -346,5 +346,42 @@ describe('master limiter', () => {
     for (let i = 0; i < n; i++) q[i] = 0.5 * Math.sin(i * 0.05);
     const [qL] = quiet.render(n, [q, q]);
     for (let i = lookahead; i < n; i++) expect(qL[i]).toBe(q[i - lookahead]);
+  });
+});
+
+describe('echo worklet', () => {
+  it('repeats exactly every delay, decays by the feedback and rings on after the send closes', () => {
+    const sim = createEchoSim(SR);
+    sim.params.delay = 0.375;
+    sim.params.send = 1;
+    const n = 3 * SR;
+    const L = new Float32Array(n);
+    L[0] = 1;
+    // send open for the impulse only, then closed (the button released / fader cut)
+    const first = sim.render(QUANTUM, [L.subarray(0, QUANTUM), L.subarray(0, QUANTUM)]);
+    sim.params.send = 0;
+    const rest = sim.render(n - QUANTUM);
+    const out = new Float32Array(n);
+    out.set(first[0]);
+    out.set(rest[0], QUANTUM);
+    const D = 0.375 * SR;
+    const energy: number[] = [];
+    for (let k = 1; k <= 6; k++) {
+      // the repeat starts exactly k * D frames later (the one-pole filter smears it forwards only)
+      expect(Math.abs(out[k * D - 1])).toBeLessThan(1e-9);
+      expect(Math.abs(out[k * D])).toBeGreaterThan(1e-4);
+      let e = 0;
+      for (let i = k * D; i < k * D + 400; i++) e += out[i] * out[i];
+      energy.push(e);
+    }
+    // each repeat is quieter than the last, by about the feedback (darkening takes a little more)
+    for (let k = 1; k < energy.length; k++) {
+      const ratio = Math.sqrt(energy[k] / energy[k - 1]);
+      expect(ratio).toBeLessThan(0.56);
+      expect(ratio).toBeGreaterThan(0.3);
+    }
+    // and dies away to exact silence, after which it costs nothing
+    const tail = sim.render(20 * SR)[0];
+    expect(tail[tail.length - 1]).toBe(0);
   });
 });

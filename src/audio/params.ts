@@ -162,3 +162,18 @@ export function estimateLatencySec(i: LatencyInputs): number {
   }
   return out + Math.max(0, i.graphDelay);
 }
+
+/** Changes of the automatic latency estimate glide with this time constant… */
+export const LATENCY_GLIDE_SEC = 0.5;
+/** …unless they are this large (a new output route, Bluetooth): then they apply at once. */
+export const LATENCY_JUMP_SEC = 0.04;
+
+/**
+ * Move the latency in use towards a new estimate. Small changes (the estimate switching between
+ * sources, settling) glide so as-heard positions do not step; a new output route jumps.
+ */
+export function glideLatency(current: number | null, target: number, dtSec: number): number {
+  if (current === null || !isFinite(current) || Math.abs(target - current) > LATENCY_JUMP_SEC) return target;
+  const dt = clamp(dtSec, 0, 1);
+  return current + (target - current) * (1 - Math.exp(-dt / LATENCY_GLIDE_SEC));
+}

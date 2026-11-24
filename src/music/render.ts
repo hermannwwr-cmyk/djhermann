@@ -487,8 +487,6 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     revIn.fill(0, 0, n);
     dlyIn.fill(0, 0, n);
 
-    const T = ((globalThis as any).__T ??= {}); let tq = performance.now(); const lap = (k: string) => { const t = performance.now(); T[k] = (T[k] ?? 0) + t - tq; tq = t; };
-    lap('fills');
     while (nextVoice < voices.length && voices[nextVoice].start < c0 + n) active.push(voices[nextVoice++]);
     const still: Voice[] = [];
     for (const v of active) {
@@ -497,17 +495,13 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     }
     active = still;
 
-    lap('voices');
     fillDuck(c0, n);
-    lap('duck');
-    for (const st of stems) { processStem(st, c0, n); lap('stem:' + st.id); }
+    for (const st of stems) processStem(st, c0, n);
 
     delay!.process(dlyIn, mixL, mixR, revIn, n, dbToGain(mix.delay.returnDb), mix.delay.toReverb);
-    lap('delay');
     const rin = revIn;
     for (let i = 0; i < n; i++) rin[i] = revHp.hp(rin[i]);
     reverb!.process(revIn, wetL, wetR, n, dbToGain(mix.reverb.returnDb));
-    lap('reverb');
     const rd = mix.reverb.duck;
 
     // hot loop: everything in locals (captured mutable variables would be boxed on every write)
@@ -553,9 +547,7 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     dc[1] = Math.abs(dcR) < 1e-25 ? 0 : dcR;
     dc[2] = dcPrevL;
     dc[3] = dcPrevR;
-    lap('master');
     limiter.process(mixL, mixR, n);
-    lap('limiter');
     // the limiter delays by `look` frames: write that much earlier, so the PCM has no latency
     const i0 = Math.max(0, look - c0);
     const i1 = Math.min(n, total + look - c0);
@@ -563,12 +555,12 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     const oR = outR;
     for (let i = i0; i < i1; i++) {
       const o = c0 + i - look;
-      const a = Math.round(mL[i] * 32767);
-      const b = Math.round(mR[i] * 32767);
+      // round to nearest: floor(x + 0.5) on a positive offset, then clamp
+      const a = ((mL[i] * 32767 + 32768.5) | 0) - 32768;
+      const b = ((mR[i] * 32767 + 32768.5) | 0) - 32768;
       oL[o] = a > 32767 ? 32767 : a < -32768 ? -32768 : a;
       oR[o] = b > 32767 ? 32767 : b < -32768 ? -32768 : b;
     }
-    lap('out');
   }
 
   return {

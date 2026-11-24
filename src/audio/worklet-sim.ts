@@ -4,6 +4,7 @@
  */
 import deckSource from '../../public/worklets/deck-processor.js?raw';
 import limiterSource from '../../public/worklets/limiter-processor.js?raw';
+import echoSource from '../../public/worklets/echo-processor.js?raw';
 
 export const QUANTUM = 128;
 
@@ -14,7 +15,7 @@ interface SimPort {
 
 interface SimProcessor {
   port: SimPort;
-  process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean;
+  process(inputs: Float32Array[][], outputs: Float32Array[][], params: Record<string, Float32Array>): boolean;
 }
 
 type ProcessorClass = new (options?: unknown) => SimProcessor;
@@ -26,11 +27,18 @@ export interface WorkletSim {
   readonly messages: { frame: number; data: unknown }[];
   /** deliver a message; it is seen at the start of the next block, like a real MessagePort */
   send(msg: Record<string, unknown>): void;
+  /** AudioParam values (k-rate: one value per block); start at the descriptors' defaults */
+  readonly params: Record<string, number>;
   /** render n frames (rounded up to whole blocks) of stereo output; input defaults to silence */
   render(n: number, input?: [Float32Array, Float32Array]): [Float32Array, Float32Array];
 }
 
-function load(source: string, name: string, sampleRate: number, options?: unknown): { proc: SimProcessor; env: { currentFrame: number }; posted: { frame: number; data: unknown }[] } {
+function load(
+  source: string,
+  name: string,
+  sampleRate: number,
+  options?: unknown,
+): { proc: SimProcessor; cls: ProcessorClass; env: { currentFrame: number }; posted: { frame: number; data: unknown }[] } {
   const posted: { frame: number; data: unknown }[] = [];
   const env = {
     currentFrame: 0,
@@ -53,14 +61,18 @@ function load(source: string, name: string, sampleRate: number, options?: unknow
   const run = new Function('env', `with (env) {\n${source}\n}`) as (e: typeof env) => void;
   run(env);
   if (!registered) throw new Error(`${name} did not register a processor`);
-  const proc = new (registered as ProcessorClass)(options);
-  return { proc, env, posted };
+  const cls = registered as ProcessorClass;
+  return { proc: new cls(options), cls, env, posted };
 }
 
 function createSim(source: string, name: string, sampleRate: number, options?: unknown): WorkletSim {
-  const { proc, env, posted } = load(source, name, sampleRate, options);
+  const { proc, env, posted, cls } = load(source, name, sampleRate, options);
   const inbox: Record<string, unknown>[] = [];
+  const params: Record<string, number> = {};
+  const descriptors = (cls as unknown as { parameterDescriptors?: { name: string; defaultValue: number }[] }).parameterDescriptors ?? [];
+  for (const d of descriptors) params[d.name] = d.defaultValue;
   return {
+    params,
     get frame() {
       return env.currentFrame;
     },
@@ -78,7 +90,9 @@ function createSim(source: string, name: string, sampleRate: number, options?: u
         const oR = new Float32Array(QUANTUM);
         const off = b * QUANTUM;
         const inputs: Float32Array[][] = input ? [[input[0].subarray(off, off + QUANTUM), input[1].subarray(off, off + QUANTUM)]] : [[]];
-        proc.process(inputs, [[oL, oR]]);
+        const p: Record<string, Float32Array> = {};
+        for (const k of Object.keys(params)) p[k] = new Float32Array([params[k]]);
+        proc.process(inputs, [[oL, oR]], p);
         L.set(oL, off);
         R.set(oR, off);
         env.currentFrame += QUANTUM;
@@ -92,3 +106,6 @@ export const createDeckSim = (sampleRate = 48000): WorkletSim => createSim(deckS
 
 export const createLimiterSim = (sampleRate: number, processorOptions: Record<string, number>): WorkletSim =>
   createSim(limiterSource, 'limiter-processor', sampleRate, { processorOptions });
+
+export const createEchoSim = (sampleRate: number, maxDelay = 1.5): WorkletSim =>
+  createSim(echoSource, 'echo-processor', sampleRate, { processorOptions: { maxDelay } });

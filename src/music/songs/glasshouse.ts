@@ -44,7 +44,7 @@ export default defineSong({
   },
   chords: {
     saw: { detune: 0.013, seed: 81 },
-    groove: 'x - - - | - - - - | - - - - | - - - -',
+    groove: 'x - - - | - - - - | . . . . | x - . .',
     drop: 'x - . x | - . x - | . . x - | x - . .',
     stabRelease: 0.07,
   },
@@ -73,7 +73,7 @@ export default defineSong({
   },
   cut: { intro: [500, 2000], groove: 2600, build: [1500, 13000], breakdown: [650, 3400], outro: 600 },
   mix: baseMix(
-    { chords: { gainDb: -16, duck: 0.6 }, lead: { gainDb: -10 }, pluck: { gainDb: -16 } },
-    { reverb: { decay: 0.7, damping: 0.35, preDelay: 0.02, returnDb: -5, duck: 0.5 }, delay: { beats: 0.5, feedback: 0.35, damp: 0.4, returnDb: -10, toReverb: 0.2 }, masterDb: 0 },
+    { chords: { trim: 1, duck: 0.6 }, lead: { trim: 2 }, pluck: { trim: 2 } },
+    { reverb: { decay: 0.7, damping: 0.35, preDelay: 0.02, returnDb: -5, duck: 0.5 }, delay: { beats: 0.5, feedback: 0.35, damp: 0.4, returnDb: -10, toReverb: 0.2 }, masterDb: -0.6 },
   ),
 });

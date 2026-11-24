@@ -5,6 +5,7 @@ import {
   FILTER_DEAD_ZONE,
   detectPlatform,
   echoDelaySec,
+  glideLatency,
   eqBandGain,
   estimateLatencySec,
   filterSettings,
@@ -80,6 +81,18 @@ describe('echo, master, latency', () => {
     expect(estimateLatencySec({ platform: 'desktop', graphDelay: 0 })).toBeCloseTo(0.025, 9);
     // never below what the timestamps imply
     expect(estimateLatencySec({ baseLatency: 0.005, measured: 0.08, platform: 'android', graphDelay: 0 })).toBeCloseTo(0.08, 9);
+  });
+  it('latency changes glide, route changes jump', () => {
+    expect(glideLatency(null, 0.03, 0.016)).toBe(0.03);
+    // 2 ms change: a frame moves it by well under 0.1 ms, a few seconds complete it
+    const step = glideLatency(0.03, 0.032, 1 / 60) - 0.03;
+    expect(step * 1000).toBeLessThan(0.1);
+    expect(step).toBeGreaterThan(0);
+    let v = 0.03;
+    for (let i = 0; i < 180; i++) v = glideLatency(v, 0.032, 1 / 60);
+    expect(Math.abs(v - 0.032) * 1000).toBeLessThan(0.01);
+    // Bluetooth: 150 ms more at once
+    expect(glideLatency(0.03, 0.18, 1 / 60)).toBe(0.18);
   });
   it('detects the platform', () => {
     expect(detectPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')).toBe('ios');

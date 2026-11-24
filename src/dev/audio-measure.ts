@@ -533,6 +533,8 @@ export async function measureClock(engine: RealAudioEngine, track: LoadedTrack, 
   engine.setCrossfader(-1);
   engine.play('A');
   await sleep(1500);
+  const ctx = engine.debug.ctx;
+  const raw0 = [performance.now(), ctx.currentTime];
   const t: number[] = [];
   const pos: number[] = [];
   const atDiff: number[] = [];
@@ -580,6 +582,8 @@ export async function measureClock(engine: RealAudioEngine, track: LoadedTrack, 
       jitter = Math.max(jitter, Math.abs(dp - (t[i] - t[i - 1]) / 1000));
     }
   }
+  const raw1 = [performance.now(), ctx.currentTime];
+  const rawCtxDriftPpm = ((raw1[1] - raw0[1]) / ((raw1[0] - raw0[0]) / 1000) - 1) * 1e6;
   const frameMs = t.slice(1).map((v, i) => v - t[i]);
   frameMs.sort((x, y) => x - y);
   const stats = engine.debug.stats();
@@ -589,6 +593,8 @@ export async function measureClock(engine: RealAudioEngine, track: LoadedTrack, 
     medianFrameMs: round(frameMs[frameMs.length >> 1], 2),
     rateFromFit: round(b, 7),
     driftPpm: round((b - 1) * 1e6, 1),
+    /** how fast the audio device's own clock ran against performance.now() (positions follow it) */
+    rawCtxDriftPpm: round(rawCtxDriftPpm, 1),
     maxDeviationFromLineMs: round(resid * 1000, 3),
     maxFrameToFrameJitterMs: round(jitter * 1000, 3),
     nonIncreasingFrames: backwards,

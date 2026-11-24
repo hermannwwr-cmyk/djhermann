@@ -35,7 +35,7 @@ import { BAND_SCALE, analyseBlock, ballistic, bandToUnit, blockPeak } from './me
 import type { BlockLevels } from './meters';
 import { buildMixer, loadWorklets } from './mixer';
 import type { Mixer } from './mixer';
-import { detectPlatform, echoDelaySec, estimateLatencySec, limiterLookaheadFrames } from './params';
+import { detectPlatform, echoDelaySec, estimateLatencySec, glideLatency, limiterLookaheadFrames } from './params';
 import { createUnmute } from './unmute';
 
 export { buildMixer, loadWorklets } from './mixer';
@@ -65,6 +65,7 @@ export interface AudioEngineDebug {
     historySize: Record<DeckId, number>;
     clockLocked: boolean;
     clockUsesTimestamps: boolean;
+    clockDiag: { tsDisagree: number; tsStale: number; resets: number; relocks: number };
     measuredOutputLatencyMs: number | null;
     outputLatencyMs: number | null;
     baseLatencyMs: number | null;
@@ -340,7 +341,9 @@ export function createAudioEngine(): AudioEngine {
     }, delay);
   }
 
+  let relocks = 0;
   function relockClock(): void {
+    relocks++;
     clock.reset();
     clockBurst = 24;
     if (clockTimer !== null) {
@@ -370,7 +373,18 @@ export function createAudioEngine(): AudioEngine {
     return mixer ? mixer.delaySec : limiterLookaheadFrames(sr) / sr;
   }
 
+  let autoLatency: number | null = null;
+  let autoLatencyMs = 0;
+
+  /** The automatic estimate, glided (see glideLatency). */
   function autoLatencySec(): number {
+    const now = performance.now();
+    autoLatency = glideLatency(autoLatency, rawAutoLatencySec(), (now - autoLatencyMs) / 1000);
+    autoLatencyMs = now;
+    return autoLatency;
+  }
+
+  function rawAutoLatencySec(): number {
     return estimateLatencySec({
       outputLatency: (ctx as unknown as { outputLatency?: number }).outputLatency,
       baseLatency: (ctx as unknown as { baseLatency?: number }).baseLatency,
@@ -990,6 +1004,7 @@ export function createAudioEngine(): AudioEngine {
           historySize: { A: decks.A.history.size, B: decks.B.history.size },
           clockLocked: clock.isLocked,
           clockUsesTimestamps: clock.usingTimestamps,
+          clockDiag: { ...clock.diag, relocks },
           measuredOutputLatencyMs: measured === null ? null : measured * 1000,
           outputLatencyMs: typeof ol === 'number' ? ol * 1000 : null,
           baseLatencyMs: typeof bl === 'number' ? bl * 1000 : null,

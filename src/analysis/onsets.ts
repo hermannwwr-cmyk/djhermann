@@ -24,8 +24,19 @@ export interface OnsetStrength {
 export type BandName = 'low' | 'mid' | 'high';
 export const BAND_NAMES: readonly BandName[] = ['low', 'mid', 'high'];
 
-/** Peak-hold (ms) per band: half a period of the lowest frequency the band should show cleanly. */
-const HOLD_MS: Record<BandName | 'sub', number> = { low: 14, mid: 4, high: 2, sub: 14 };
+export type OnsetHolds = Record<BandName | 'sub', number>;
+
+/**
+ * Peak-hold (ms) per band for the beat-grid detector: half a period of the lowest frequency the
+ * band should show cleanly. Short, so the folded onsets stay sharp.
+ */
+export const GRID_HOLDS: OnsetHolds = { low: 14, mid: 4, high: 2, sub: 14 };
+/**
+ * Peak-hold (ms) per band for the beat-energy map (charting notes). The mid and high bands hold
+ * for a whole period of a 45 Hz bass note: a sawtooth bass makes the upper bands flutter at its
+ * fundamental, which the short holds report as a stream of small onsets.
+ */
+export const ENERGY_HOLDS: OnsetHolds = { low: 14, mid: 22, high: 22, sub: 14 };
 /** Light smoothing (ms) after the hold. */
 const SMOOTH_MS: Record<BandName | 'sub', number> = { low: 5, mid: 3, high: 3, sub: 5 };
 /** The knee of the log compression sits this far below the band's loud level. */
@@ -53,7 +64,7 @@ export function peakHold(src: Float32Array, hold: number): Float32Array {
 type AnyBand = BandName | 'sub';
 const ALL_BANDS: readonly AnyBand[] = ['low', 'mid', 'high', 'sub'];
 
-export function computeOnsets(bands: BandPower): OnsetStrength {
+export function computeOnsets(bands: BandPower, holds: OnsetHolds = GRID_HOLDS): OnsetStrength {
   const n = bands.length;
   const amps: Record<AnyBand, Float32Array> = {
     low: new Float32Array(n),
@@ -67,7 +78,7 @@ export function computeOnsets(bands: BandPower): OnsetStrength {
   const sample = new Float32Array(Math.ceil(n / stride));
   for (const band of ALL_BANDS) {
     const amp = amps[band];
-    const held = peakHold(bands[band], Math.max(1, Math.round((HOLD_MS[band] * bands.rate) / 1000)));
+    const held = peakHold(bands[band], Math.max(1, Math.round((holds[band] * bands.rate) / 1000)));
     smooth(held, hannKernel(Math.max(1, Math.round((SMOOTH_MS[band] * bands.rate) / 1000))), amp);
     for (let i = 0; i < n; i++) amp[i] = Math.sqrt(amp[i] > 0 ? amp[i] : 0);
     for (let i = 0, k = 0; i < n; i += stride, k++) sample[k] = amp[i];

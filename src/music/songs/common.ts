@@ -202,19 +202,28 @@ export interface SongSpec {
 
 const bus = (gainDb: number, hp: number, reverb: number, delay: number, duck: number): BusSettings => ({ gainDb, hp, reverb, delay, duck });
 
-/** A sensible starting mix; songs override what they need. */
-export function baseMix(over: Partial<Record<StemId, Partial<BusSettings>>> = {}, rest: Partial<Omit<MixSettings, 'stems'>> = {}): MixSettings {
+/** Per-stem changes a song makes to the default mix; `trim` is added to the default gain in dB. */
+export type BusTweak = Partial<Omit<BusSettings, 'gainDb'>> & { trim?: number };
+
+/**
+ * A balanced starting mix (drop RMS of each stem soloed, before the master gain: kick ≈ -14,
+ * bass ≈ -15, chords and lead ≈ -18, plucks ≈ -21, clap ≈ -26, hats ≈ -30 dB); songs trim it.
+ */
+export function baseMix(over: Partial<Record<StemId, BusTweak>> = {}, rest: Partial<Omit<MixSettings, 'stems'>> = {}): MixSettings {
   const stems: Record<StemId, BusSettings> = {
-    kick: bus(-3, 0, 0, 0, 0),
-    drums: bus(-9, 160, 0.16, 0, 0),
-    tops: bus(-17, 450, 0.05, 0, 0.12),
-    bass: bus(-7, 22, 0, 0, 0.9),
-    chords: bus(-17, 190, 0.22, 0.04, 0.72),
-    pluck: bus(-15, 220, 0.2, 0.26, 0.4),
-    lead: bus(-10, 260, 0.2, 0.2, 0.3),
-    fx: bus(-13, 140, 0.16, 0, 0.1),
+    kick: bus(-5, 0, 0, 0, 0),
+    drums: bus(-4.5, 160, 0.16, 0, 0),
+    tops: bus(-8, 450, 0.05, 0, 0.12),
+    bass: bus(-10, 0, 0, 0, 0.9),
+    chords: bus(-9.5, 190, 0.22, 0.04, 0.72),
+    pluck: bus(-12, 220, 0.2, 0.26, 0.4),
+    lead: bus(0, 260, 0.2, 0.2, 0.3),
+    fx: bus(-6, 140, 0.16, 0, 0.1),
   };
-  for (const k of Object.keys(over) as StemId[]) stems[k] = { ...stems[k], ...over[k] };
+  for (const k of Object.keys(over) as StemId[]) {
+    const { trim = 0, ...restTweak } = over[k]!;
+    stems[k] = { ...stems[k], ...restTweak, gainDb: stems[k].gainDb + trim };
+  }
   return {
     stems,
     reverb: { decay: 0.72, damping: 0.4, preDelay: 0.022, returnDb: -5, duck: 0.45, ...rest.reverb },
@@ -436,6 +445,16 @@ export function defineSong(spec: SongSpec): SongDef {
     a.ramp('pluck.cut', BAR.breakdown, 2500, BAR.drop2, 12000, 'exp');
     a.set('pluck.cut', BAR.drop2, 20000);
     a.ramp('pluck.cut', BAR.outro, 8000, BAR.outro + 4, 1200, 'exp');
+    // the groove holds back so the drop is clearly bigger
+    a.set('chords.gain', BAR.groove, 0.78);
+    a.set('chords.gain', BAR.build1, 0.9);
+    a.set('chords.gain', BAR.drop1, 1);
+    // the breakdown sits back: pads and plucks a few dB down, back up through the second build
+    a.set('chords.gain', BAR.breakdown, 0.62);
+    a.ramp('chords.gain', BAR.build2, 0.62, BAR.drop2, 1);
+    a.set('pluck.gain', 0, 1);
+    a.set('pluck.gain', BAR.breakdown, 0.6);
+    a.ramp('pluck.gain', BAR.build2, 0.6, BAR.drop2, 1);
     // a soft pump through the breakdown so the pads still breathe without a kick
     a.ghost(BAR.breakdown, BAR.build2, 0.25);
   }

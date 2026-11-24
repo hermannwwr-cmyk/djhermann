@@ -13,7 +13,7 @@ import { computeBeatEnergy, loudnessEnvelope } from './energy';
 import type { LoudnessEnvelope } from './energy';
 import { detectGridFromOnsets } from './grid';
 import type { GridHint, GridResult } from './grid';
-import { computeOnsets } from './onsets';
+import { computeOnsets, ENERGY_HOLDS, GRID_HOLDS } from './onsets';
 import { computeWaveform } from './waveform';
 
 /** Rate of the stored loudness envelope (frames per second). */
@@ -57,7 +57,7 @@ export async function runAnalysis(
   const detect = !job.grid;
   // share of the progress bar: band split, onsets, grid, energy + waveform
   const wBands = detect ? 0.62 : 0.8;
-  const wOnsets = 0.1;
+  const wOnsets = detect ? 0.08 : 0;
   const wGrid = detect ? 0.18 : 0;
   const report = (p: number, stage: string): void => onProgress?.(Math.min(1, Math.max(0, p)), stage);
 
@@ -66,9 +66,6 @@ export async function runAnalysis(
   if (pause) await pause();
   const bands = computeBandPower(mix, (p) => report(p * wBands, STAGE_LISTEN));
   if (pause) await pause();
-  const onsets = computeOnsets(bands);
-  report(wBands + wOnsets, detect ? STAGE_BEAT : STAGE_WAVE);
-  if (pause) await pause();
 
   let grid: BeatGrid;
   let confidence = 1;
@@ -76,6 +73,9 @@ export async function runAnalysis(
   if (job.grid) {
     grid = job.grid;
   } else {
+    const onsets = computeOnsets(bands, GRID_HOLDS);
+    report(wBands + wOnsets, STAGE_BEAT);
+    if (pause) await pause();
     const result = detectGridFromOnsets(onsets, bands, job.hint ?? undefined);
     grid = result.grid;
     confidence = result.confidence;
@@ -88,7 +88,7 @@ export async function runAnalysis(
   let envelope: LoudnessEnvelope | null = null;
   if (job.analysis) {
     const waveform = computeWaveform(bands);
-    const energy = computeBeatEnergy(bands, onsets, grid);
+    const energy = computeBeatEnergy(bands, computeOnsets(bands, ENERGY_HOLDS), grid);
     analysis = { waveform, energy };
     envelope = loudnessEnvelope(bands, ENVELOPE_RATE);
   }

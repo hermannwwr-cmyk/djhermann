@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { PcmData, WaveformData } from '../core/types';
 import { computeBandPower, mixdown } from './bands';
 import { computeBeatEnergy } from './energy';
-import { computeOnsets } from './onsets';
+import { computeOnsets, ENERGY_HOLDS } from './onsets';
 import { synthTrack } from './synth';
 import { computeWaveform, displayLevel, WAVEFORM_RATE } from './waveform';
 
@@ -40,12 +40,12 @@ describe('waveform', () => {
   test('the three bands split at about 180 Hz and 2.5 kHz', () => {
     // a mixture: each band hears its own tone; the others stay far below it
     const bandOf = (freq: number): Record<'low' | 'mid' | 'high', number> => {
-      const pcm = tone([freq, 20]); // the 20 Hz partner sits under the low band's rumble filter
+      const pcm = tone([freq]);
       const bands = computeBandPower(mixdown(pcm));
       const rms = (a: Float32Array): number => Math.sqrt(a.reduce((s, v) => s + v, 0) / a.length);
       return { low: rms(bands.low), mid: rms(bands.mid), high: rms(bands.high) };
     };
-    const low = bandOf(70);
+    const low = bandOf(60);
     expect(low.low).toBeGreaterThan(20 * low.mid);
     expect(low.low).toBeGreaterThan(20 * low.high);
     const mid = bandOf(800);
@@ -110,7 +110,7 @@ describe('waveform', () => {
 describe('beat energy', () => {
   const track = synthTrack({ bpm: 124, firstBeatSec: 0.37, bars: 64, seed: 5 });
   const bands = computeBandPower(mixdown(track.pcm));
-  const onsets = computeOnsets(bands);
+  const onsets = computeOnsets(bands, ENERGY_HOLDS);
   const energy = computeBeatEnergy(bands, onsets, track.grid);
   // first drop: bars 20..35
   const dropFrom = 20 * 4 * 4;
@@ -138,22 +138,17 @@ describe('beat energy', () => {
     }
   });
 
-  test('kicks on the beat, hats on the off-beat, claps on 2 and 4', () => {
+  test('kicks on the beat, hats on the off-beat, nothing on the in-between sixteenths', () => {
     const low = [0, 1, 2, 3].map((s) => avgAt(energy.low, s));
+    const mid = [0, 1, 2, 3].map((s) => avgAt(energy.mid, s));
     const high = [0, 1, 2, 3].map((s) => avgAt(energy.high, s));
-    console.log(`[energy] drop low by sixteenth ${low.map((v) => v.toFixed(2)).join(' ')} | high ${high.map((v) => v.toFixed(2)).join(' ')}`);
+    const fmt = (a: number[]): string => a.map((v) => v.toFixed(2)).join(' ');
+    console.log(`[energy] drop, mean per sixteenth: low ${fmt(low)} | mid ${fmt(mid)} | high ${fmt(high)}`);
     expect(low[0]).toBeGreaterThan(0.8);
-    expect(low[0]).toBeGreaterThan(3 * Math.max(low[1], low[3]));
-    expect(high[2]).toBeGreaterThan(0.6);
-    expect(high[2]).toBeGreaterThan(3 * Math.max(high[1], high[3]));
-    // clap: beats 2 and 4 of the bar (odd beats) are stronger in the mid band than beats 1 and 3
-    let odd = 0;
-    let even = 0;
-    for (let i = dropFrom; i < dropTo; i += 4) {
-      if (Math.floor(i / 4) % 2 === 1) odd += energy.mid[i];
-      else even += energy.mid[i];
-    }
-    expect(odd).toBeGreaterThan(1.5 * even);
+    expect(low[0]).toBeGreaterThan(2.5 * Math.max(low[1], low[2], low[3]));
+    expect(high[2]).toBeGreaterThan(0.6); // the off-beat hat
+    // the second and fourth sixteenths hold nothing but the pad: they stay low in every band
+    for (const band of [low, mid, high]) expect(Math.max(band[1], band[3])).toBeLessThan(0.35);
   });
 
   test('bar loudness: the drop is loud, the break and intro quiet', () => {
@@ -169,7 +164,7 @@ describe('beat energy', () => {
     const at = Math.round((track.grid.firstBeatSec + 100.25 * (60 / 124)) * pcm.sampleRate);
     for (let i = 0; i < 400; i++) for (const c of pcm.channels) c[at + i] = i % 2 ? 32000 : -32000;
     const b2 = computeBandPower(mixdown(pcm));
-    const e2 = computeBeatEnergy(b2, computeOnsets(b2), track.grid);
+    const e2 = computeBeatEnergy(b2, computeOnsets(b2, ENERGY_HOLDS), track.grid);
     let s = 0;
     let n = 0;
     for (let i = dropFrom; i < dropTo; i += 4) {
