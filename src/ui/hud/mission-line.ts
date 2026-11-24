@@ -37,11 +37,24 @@ function setRich(target: HTMLElement, text: string, emphasiseCaps: boolean): voi
 }
 
 /** Step the font down (data-fit 1, 2) until the line fits; past that it ends in an ellipsis. */
+const range = typeof document === 'undefined' ? null : document.createRange();
+
+/**
+ * True when the text is wider than its box. scrollWidth is rounded to whole pixels, so a line that
+ * is 0.4 px too long would pass it and still end in an ellipsis: measure the text itself instead.
+ */
+function overflows(target: HTMLElement): boolean {
+  if (target.scrollWidth > target.clientWidth) return true;
+  if (!range || !target.firstChild) return false;
+  range.selectNodeContents(target);
+  return range.getBoundingClientRect().width > target.getBoundingClientRect().width + 0.01;
+}
+
 function fit(target: HTMLElement): void {
   target.dataset.fit = '0';
-  if (target.scrollWidth <= target.clientWidth) return;
+  if (!overflows(target)) return;
   target.dataset.fit = '1';
-  if (target.scrollWidth <= target.clientWidth) return;
+  if (!overflows(target)) return;
   target.dataset.fit = '2';
 }
 
@@ -92,6 +105,21 @@ export function createMissionLine(): MissionLine {
   let progShown = -1;
   let progOn = false;
 
+  /**
+   * The instruction must be read in full: shrink it, and if it still does not fit, give it the
+   * points column too (the points are a nice-to-know, the hint is what the player has to do).
+   */
+  function fitInstruction(): void {
+    root.dataset.squeeze = '0';
+    fit(title);
+    fit(hint);
+    if (overflows(title) || overflows(hint)) {
+      root.dataset.squeeze = '1';
+      fit(title);
+      fit(hint);
+    }
+  }
+
   function setIcon(svg: string): void {
     chipIcon.innerHTML = svg;
   }
@@ -117,6 +145,7 @@ export function createMissionLine(): MissionLine {
     root.dataset.mode = next;
     if (next !== 'result') delete root.dataset.rating;
     if (next !== 'mission') {
+      root.dataset.squeeze = '0';
       setProgress(null, 0);
       setTime(1);
       shownId = -1;
@@ -179,10 +208,8 @@ export function createMissionLine(): MissionLine {
     shownTitle = m.title;
     shownHint = m.hint;
     shownGesture = gesture;
-    shownPoints = -1;
     setMode('mission');
-    fit(title);
-    fit(hint);
+    fitInstruction();
     if (animate) intro(true);
   }
 
@@ -228,7 +255,8 @@ export function createMissionLine(): MissionLine {
     resize(nw) {
       width = nw;
       progShown = -1;
-      if (mode === 'mission' || mode === 'result' || mode === 'status') {
+      if (mode === 'mission') fitInstruction();
+      else if (mode === 'result' || mode === 'status') {
         fit(title);
         fit(hint);
       }
@@ -246,14 +274,15 @@ export function createMissionLine(): MissionLine {
       if (next === 'mission' && m) {
         const gesture = m.targets.length ? m.targets[0].gesture : '';
         const textChanged = m.id !== shownId || m.title !== shownTitle || m.hint !== shownHint;
-        if (mode !== 'mission' || textChanged || gesture !== shownGesture) {
-          renderMission(m, mode !== 'mission' || textChanged);
-        }
+        const rerender = mode !== 'mission' || textChanged || gesture !== shownGesture;
+        // the points first: they take room from the instruction, which is fitted around them
         if (m.points !== shownPoints) {
           shownPoints = m.points;
           pts.textContent = m.points > 0 ? `+${formatScore(m.points)}` : '';
           tag.textContent = m.points > 0 ? 'POINTS' : '';
+          if (!rerender) fitInstruction();
         }
+        if (rerender) renderMission(m, mode !== 'mission' || textChanged);
         setProgress(m.progress, frame.dt);
         setTime(m.timeLeft);
         chip.style.transform = `scale(${(1 + 0.08 * frame.pulse).toFixed(3)})`;

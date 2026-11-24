@@ -263,7 +263,12 @@
 }
 
 .hud-hype[data-zone='low'] .hud-hype__state {
-  color: var(--red);
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 77, 94, 0.92);
+  color: #fff;
+  text-shadow: none;
+  box-shadow: 0 0 10px rgba(255, 77, 94, 0.6);
   animation: hud-blink 0.56s steps(2, jump-none) infinite;
 }
 
@@ -496,8 +501,8 @@
 .hud-mission__edge {
   width: 2px;
   margin-left: -2px;
-  background: var(--mint);
-  box-shadow: 0 0 10px 1px rgba(77, 255, 181, 0.8);
+  /* bright at the strip's edges, clear where the text runs, so it never cuts through a word */
+  background: linear-gradient(180deg, var(--mint) 0%, rgba(77, 255, 181, 0) 34%, rgba(77, 255, 181, 0) 66%, var(--mint) 100%);
 }
 
 .hud-mission[data-progress='1'] .hud-mission__fill,
@@ -701,7 +706,8 @@
   text-align: right;
 }
 
-.hud-mission[data-mode='status'] .hud-mission__side {
+.hud-mission[data-mode='status'] .hud-mission__side,
+.hud-mission[data-squeeze='1'] .hud-mission__side {
   display: none;
 }
 
@@ -1015,14 +1021,15 @@
   border-width: 1.5px;
   box-shadow: 0 0 8px rgba(var(--gold-rgb), 0.35);
   animation: hud-ring-quiet 1.6s ease-in-out infinite alternate;
+  /* guide switched off: a quiet hint, but still findable */
 }
 
 @keyframes hud-ring-quiet {
   from {
-    opacity: 0.3;
+    opacity: 0.45;
   }
   to {
-    opacity: 0.6;
+    opacity: 0.85;
   }
 }
 
