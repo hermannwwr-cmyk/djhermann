@@ -983,6 +983,7 @@ export function createDirector(deps: GigDeps): GigController {
     readStats();
     hypeHistory.push(hype);
     phase = 'ended';
+    if (completed) progress = 1;
     for (const deck of ['A', 'B'] as DeckId[]) engine.setEcho(deck, false);
     results = buildResults(true);
     if (tutorial && completed) {
@@ -1169,6 +1170,7 @@ export function createDirector(deps: GigDeps): GigController {
     replan();
     pending = null;
     phase = 'ready';
+    refreshHud();
     onProgress?.(1);
   }
 

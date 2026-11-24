@@ -2,7 +2,14 @@
  * Every word the gig puts on screen: mission titles, hints, result labels, callouts and status
  * lines. Plain words, controls named as printed on the hardware (PLAY, SYNC, TEMPO, PITCH BEND,
  * LOW, FILTER, ECHO, CROSSFADER), always with the action to make.
+ *
+ * Length limits (the HUD's mission line at 390 px): a hint fits in HINT_MAX characters, a title
+ * in TITLE_MAX, a status line in STATUS_MAX. text.test.ts checks every text against them.
  */
+export const HINT_MAX = 50;
+export const TITLE_MAX = 22;
+export const STATUS_MAX = 50;
+
 import type { DeckId } from '../../core/types';
 
 const side = (deck: DeckId): string => (deck === 'B' ? 'right' : 'left');
@@ -12,14 +19,14 @@ const bars = (n: number): string => (n === 1 ? '1 BAR' : `${n} BARS`);
 export const TEXT = {
   startSet: {
     title: 'START THE SET',
-    hint: (d: DeckId) => `Press the green PLAY button on deck ${d} to start the music`,
+    hint: (d: DeckId) => `Press the green PLAY on deck ${d} to start the music`,
     done: 'HERE WE GO',
   },
 
   startDeck: {
     title: (d: DeckId) => `START DECK ${d}`,
     /** more than a bar to go */
-    ready: (d: DeckId) => `Get ready to press PLAY on deck ${d}. Wait for NOW`,
+    ready: (d: DeckId) => `Get ready to press PLAY on deck ${d}. Wait…`,
     /** k = 4, 3, 2, 1 beats until the next bar line */
     count: (d: DeckId, k: number) => `Get ready to press PLAY on deck ${d} …  ${k}`,
     now: (d: DeckId) => `NOW! Press PLAY on deck ${d}`,
@@ -38,17 +45,17 @@ export const TEXT = {
     resultTitle: 'MATCH THE BEATS',
     syncTitle: (d: DeckId) => `SYNC DECK ${d}`,
     manualTitle: 'MATCH THE BEATS',
-    sync: (d: DeckId, other: DeckId) => `Press SYNC on deck ${d} to match its speed to deck ${other}`,
+    sync: (d: DeckId, other: DeckId) => `Press SYNC on deck ${d} to match deck ${other}'s speed`,
     syncHold: 'Synced! The beats are together…',
-    faster: (d: DeckId, from: number, to: number) =>
-      `Deck ${d} is too slow. Slide its TEMPO fader down to speed it up: ${bpm1(from)} → ${bpm1(to)} BPM`,
-    slower: (d: DeckId, from: number, to: number) =>
-      `Deck ${d} is too fast. Slide its TEMPO fader up to slow it down: ${bpm1(from)} → ${bpm1(to)} BPM`,
-    orSync: ' · SYNC also works, for fewer points',
-    behind: (d: DeckId) => `Deck ${d}'s beat is late. Hold PITCH BEND + on deck ${d} until the beats line up`,
-    ahead: (d: DeckId) => `Deck ${d}'s beat is early. Hold PITCH BEND − on deck ${d} until the beats line up`,
+    /** the TEMPO fader is realistic: down = faster */
+    faster: (d: DeckId, from: number, to: number) => `Slide TEMPO on deck ${d} down: ${bpm1(from)} → ${bpm1(to)} BPM`,
+    slower: (d: DeckId, from: number, to: number) => `Slide TEMPO on deck ${d} up: ${bpm1(from)} → ${bpm1(to)} BPM`,
+    /** shown now and then on club while the tempos differ */
+    orSync: (d: DeckId) => `Tip: SYNC on deck ${d} works too, for fewer points`,
+    behind: (d: DeckId) => `Hold PITCH BEND + on deck ${d}: its beat is late`,
+    ahead: (d: DeckId) => `Hold PITCH BEND − on deck ${d}: its beat is early`,
     hold: 'Let go! The beats are together. Keep it steady…',
-    startFirst: (d: DeckId) => `Deck ${d} has stopped. Press its PLAY button to start it again`,
+    startFirst: (d: DeckId) => `Deck ${d} stopped. Press its PLAY button`,
     inSync: 'IN SYNC',
     byHand: 'BY HAND',
     usedSync: 'USED SYNC',
@@ -60,12 +67,13 @@ export const TEXT = {
   crossfade: {
     title: (d: DeckId) => `FADE TO DECK ${d}`,
     cutTitle: (d: DeckId) => `CUT TO DECK ${d}`,
-    faderFirst: (d: DeckId) => `First slide the volume fader of deck ${d} all the way up`,
-    slide: (d: DeckId) => `Slide the CROSSFADER slowly to the ${side(d)}, all the way to deck ${d}`,
-    bonusTip: (old: DeckId) => ` · Bonus: turn LOW on deck ${old} down first`,
-    keepGoing: (d: DeckId) => `Keep sliding the CROSSFADER, slow and steady, all the way to deck ${d}`,
-    cut: (d: DeckId) =>
-      `These two tracks are too different in speed to blend. Slide the CROSSFADER quickly all the way to deck ${d}`,
+    faderFirst: (d: DeckId) => `First slide deck ${d}'s volume fader all the way up`,
+    slide: (d: DeckId) => `Slide the CROSSFADER slowly ${side(d)}, to deck ${d}`,
+    /** shown now and then before the crossfader moves (club, festival) */
+    bonusTip: (old: DeckId) => `Bonus: turn LOW on deck ${old} down while you fade`,
+    keepGoing: (d: DeckId) => `Keep sliding the CROSSFADER slowly to deck ${d}`,
+    /** the tracks are too far apart in speed to blend */
+    cut: (d: DeckId) => `Slide the CROSSFADER fast, all the way to deck ${d}`,
     perfect: 'SMOOTH MIX',
     great: 'NICE MIX',
     quick: 'QUICK CUT',
@@ -81,7 +89,7 @@ export const TEXT = {
 
   stopDeck: {
     title: (d: DeckId) => `STOP DECK ${d}`,
-    hint: (d: DeckId) => `Nobody hears deck ${d} now. Press its PLAY button again to stop it`,
+    hint: (d: DeckId) => `Press PLAY on deck ${d} again to stop it`,
     done: 'CLEAN FINISH',
     ranOut: 'RAN OUT',
     fail: 'LEFT RUNNING',
@@ -90,10 +98,10 @@ export const TEXT = {
 
   bassDrop: {
     title: 'DROP THE BASS',
-    cut: (d: DeckId) => `Turn the LOW knob on deck ${d} all the way down (to the left)`,
-    wait: 'Bass is out! Get ready to turn LOW back up when the beat drops',
+    cut: (d: DeckId) => `Turn LOW on deck ${d} all the way down (left)`,
+    wait: 'Bass is out! Turn LOW back up when the beat drops',
     /** k = 4, 3, 2, 1 beats to the drop */
-    count: (d: DeckId, k: number) => `Turn LOW on deck ${d} back up when the beat drops in ${k}…`,
+    count: (d: DeckId, k: number) => `Turn LOW on deck ${d} back up in ${k}…`,
     now: (d: DeckId) => `NOW! Turn LOW on deck ${d} back up to the middle`,
     /** tutorial: no timing */
     back: (d: DeckId) => `Now turn LOW on deck ${d} back up to the middle`,
@@ -109,8 +117,8 @@ export const TEXT = {
 
   filterSweep: {
     title: 'FILTER SWEEP',
-    out: (d: DeckId) => `Turn the FILTER knob on deck ${d} slowly to the left until the music sounds dull`,
-    back: (d: DeckId) => `Now turn FILTER on deck ${d} slowly back to the middle`,
+    out: (d: DeckId) => `Turn FILTER on deck ${d} slowly left, till it's dull`,
+    back: (d: DeckId) => `Now turn FILTER on deck ${d} back to the middle`,
     perfect: 'SMOOTH SWEEP',
     great: 'NICE SWEEP',
     quick: 'QUICK FLICK',
@@ -121,8 +129,7 @@ export const TEXT = {
 
   scratch: {
     title: 'SCRATCH!',
-    hint: (d: DeckId, times: number) =>
-      `Put a finger on the record on deck ${d} and rock it back and forth ${times} times`,
+    hint: (d: DeckId, times: number) => `Rock the record on deck ${d} back and forth ${times}×`,
     perfect: 'WICKED SCRATCH',
     great: 'NICE SCRATCH',
     ok: 'SCRATCHED',
@@ -133,7 +140,7 @@ export const TEXT = {
   echoOut: {
     title: 'ECHO OUT',
     hold: (d: DeckId) => `Last bars! Hold the ECHO button on deck ${d}`,
-    stop: (d: DeckId) => `Keep ECHO held and press PLAY on deck ${d} to stop the music`,
+    stop: (d: DeckId) => `Keep ECHO held, press PLAY on deck ${d} to stop`,
     perfect: 'PERFECT ENDING',
     great: 'NICE ENDING',
     noEcho: 'NO ECHO',
@@ -143,11 +150,11 @@ export const TEXT = {
 
   recover: {
     title: 'BRING THE MUSIC BACK',
-    play: (d: DeckId) => `The music stopped. Press the green PLAY button on deck ${d}`,
-    fader: (d: DeckId) => `Deck ${d} is turned down. Slide its volume fader all the way up`,
-    crossfader: (d: DeckId) => `The CROSSFADER is on the silent side. Slide it to the ${side(d)}, to deck ${d}`,
-    letGo: (d: DeckId) => `Let go of the record on deck ${d} so it can play`,
-    eq: (d: DeckId) => `Deck ${d} is muted. Turn its LOW knob back up to the middle`,
+    play: (d: DeckId) => `Music stopped! Press the green PLAY on deck ${d}`,
+    fader: (d: DeckId) => `Slide deck ${d}'s volume fader all the way up`,
+    crossfader: (d: DeckId) => `Slide the CROSSFADER ${side(d)}, all the way to deck ${d}`,
+    letGo: (d: DeckId) => `Let go of the record on deck ${d} so it plays`,
+    eq: (d: DeckId) => `Deck ${d} is muted. Turn its LOW knob back up`,
     done: 'MUSIC IS BACK',
     rescue: 'MUSIC BACK ON FOR YOU',
   },

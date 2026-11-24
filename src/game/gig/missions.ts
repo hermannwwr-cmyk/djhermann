@@ -48,6 +48,9 @@ const one = (control: MissionTarget['control'], gesture: MissionTarget['gesture'
 ];
 const mod = (v: number, m: number): number => ((v % m) + m) % m;
 const beatMs = (bpm: number): number => 60000 / (bpm > 0 ? bpm : TUNING.fallbackBpm);
+/** A tip takes over the hint for the last `tipBeats` of every `tipCycleBeats` of a mission. */
+const tipTime = (beatsIn: number): boolean =>
+  mod(beatsIn, TUNING.hints.tipCycleBeats) >= TUNING.hints.tipCycleBeats - TUNING.hints.tipBeats;
 
 // ───────────────────────────── start the set ─────────────────────────────
 
@@ -190,6 +193,8 @@ export function createBeatmatch(env: MissionEnv, o: BeatmatchOptions): MissionRu
   const playTargets = one(`${o.deck}.play`, 'tap');
   const fasterTargets = one(`${o.deck}.tempo`, 'down');
   const slowerTargets = one(`${o.deck}.tempo`, 'up');
+  const fasterOrSync: MissionTarget[] = [...fasterTargets, ...syncTargets];
+  const slowerOrSync: MissionTarget[] = [...slowerTargets, ...syncTargets];
   const plusTargets = one(`${o.deck}.nudge+`, 'hold');
   const minusTargets = one(`${o.deck}.nudge-`, 'hold');
 
@@ -246,17 +251,21 @@ export function createBeatmatch(env: MissionEnv, o: BeatmatchOptions): MissionRu
         } else {
           stable = 0;
           if (!manual) {
-            rt.hint = TEXT.beatmatch.sync(o.deck, o.ref) ;
+            rt.hint = TEXT.beatmatch.sync(o.deck, o.ref);
             rt.targets = syncTargets;
             rt.progress = 0;
           } else if (!tempoOk) {
-            const tip = env.difficulty === 'club' ? TEXT.beatmatch.orSync : '';
             if (bpmDiff > 0) {
-              rt.hint = TEXT.beatmatch.faster(o.deck, d.bpm, r.bpm) + tip;
+              rt.hint = TEXT.beatmatch.faster(o.deck, d.bpm, r.bpm);
               rt.targets = fasterTargets;
             } else {
-              rt.hint = TEXT.beatmatch.slower(o.deck, d.bpm, r.bpm) + tip;
+              rt.hint = TEXT.beatmatch.slower(o.deck, d.bpm, r.bpm);
               rt.targets = slowerTargets;
+            }
+            // club: now and then, mention that SYNC is allowed too
+            if (env.difficulty === 'club' && tipTime(s.clock - startClock)) {
+              rt.hint = TEXT.beatmatch.orSync(o.deck);
+              rt.targets = bpmDiff > 0 ? fasterOrSync : slowerOrSync;
             }
             rt.progress = 0.5 * clamp01(1 - Math.abs(bpmDiff) / startDiff);
           } else {
@@ -366,6 +375,7 @@ export function createCrossfade(env: MissionEnv, o: CrossfadeOptions): MissionRu
   const title = o.cut ? TEXT.crossfade.cutTitle(o.to) : TEXT.crossfade.title(o.to);
   const xfTargets = one('xfader', o.to === 'B' ? 'right' : 'left');
   const faderTargets = one(`${o.to}.fader`, 'up');
+  const tipTargets: MissionTarget[] = [{ control: `${o.from}.eq.low`, gesture: 'turn-left' }, ...xfTargets];
 
   const rt: MissionRuntime = {
     kind: 'crossfade',
@@ -391,11 +401,12 @@ export function createCrossfade(env: MissionEnv, o: CrossfadeOptions): MissionRu
         rt.targets = faderTargets;
       } else {
         rt.targets = xfTargets;
-        rt.hint = o.cut
-          ? TEXT.crossfade.cut(o.to)
-          : travel > F.lo
-            ? TEXT.crossfade.keepGoing(o.to)
-            : TEXT.crossfade.slide(o.to) + (o.tip ? TEXT.crossfade.bonusTip(o.from) : '');
+        rt.hint = o.cut ? TEXT.crossfade.cut(o.to) : travel > F.lo ? TEXT.crossfade.keepGoing(o.to) : TEXT.crossfade.slide(o.to);
+        // before the slide starts, now and then point at the bass-swap bonus
+        if (o.tip && !o.cut && travel <= F.lo && tipTime(s.clock - startClock)) {
+          rt.hint = TEXT.crossfade.bonusTip(o.from);
+          rt.targets = tipTargets;
+        }
       }
       rt.progress = clamp01(travel);
       if (o.deadlineBeats !== null) {

@@ -196,23 +196,28 @@ export const TUNING = {
   },
 
   // ───────────── score and grade ─────────────
+  /**
+   * Scale: a note is worth 100 × the combo multiplier (up to ×4) in the playfield, so a perfect
+   * transition (≈ 22 000 with the bass swap) is worth about 55 perfect notes at full combo, and
+   * the missions make up roughly a third of a perfect score.
+   */
   points: {
     mission: {
-      'start-set': 100,
-      'start-deck': 1000,
-      beatmatch: 1500,
-      crossfade: 1500,
-      'stop-deck': 300,
-      'bass-drop': 1200,
-      'filter-sweep': 800,
-      scratch: 800,
-      'echo-out': 1000,
+      'start-set': 500,
+      'start-deck': 5000,
+      beatmatch: 7500,
+      crossfade: 7500,
+      'stop-deck': 1500,
+      'bass-drop': 6000,
+      'filter-sweep': 4000,
+      scratch: 4000,
+      'echo-out': 5000,
     } as Record<MissionKind, number>,
     /** share of the points for each rating */
     rating: { perfect: 1, great: 0.7, ok: 0.4, fail: 0 } as Record<MissionRating, number>,
-    bassSwapBonus: 500,
+    bassSwapBonus: 2500,
     /** finishing bonus per track of the set, multiplied by the average hype */
-    finishPerTrack: 2000,
+    finishPerTrack: 10000,
   },
   grade: {
     /** how the three ingredients are weighed */
@@ -254,6 +259,8 @@ export const TUNING = {
     mixSoonBars: 16,
     lastBars: 8,
   },
+  /** a tip ("SYNC works too", "bonus: bass swap") replaces the hint for the last tipBeats of every cycle */
+  hints: { tipCycleBeats: 8, tipBeats: 3 },
   /** tempo assumed for the gig clock before any deck has played */
   fallbackBpm: 120,
   /** a direct action by the director is recognised in the engine's events for this long (ms) */

@@ -32,6 +32,7 @@ import { createMockEngine } from '../../dev/mock-engine';
 import type { MockEngine } from '../../dev/mock-engine';
 import { MOCK_CATALOG, mockMeta, mockTrack } from '../../dev/mocks';
 import { createGig } from './index';
+import { HINT_MAX, STATUS_MAX, TITLE_MAX } from './text';
 
 // ───────────────────────────── fakes ─────────────────────────────
 
@@ -42,7 +43,8 @@ export interface FakeRhythm extends RhythmController {
   judge(j: Judgment): void;
 }
 
-const POINTS: Record<Judgment, number> = { perfect: 300, great: 200, good: 100, miss: 0 };
+/** the playfield's own values (src/game/rhythm/core.ts) */
+const POINTS: Record<Judgment, number> = { perfect: 100, great: 70, good: 40, miss: 0 };
 const WEIGHT: Record<Judgment, number> = { perfect: 1, great: 0.7, good: 0.4, miss: 0 };
 
 export function createFakeRhythm(bus: GameBus): FakeRhythm {
@@ -237,10 +239,13 @@ export async function createSim(o: SimOptions = {}): Promise<Sim> {
       if (hud.mission.targets.length < 1) violations.push(`mission ${hud.mission.kind} has no target`);
       if (!hud.mission.hint.trim()) violations.push(`mission ${hud.mission.kind} has no hint`);
       if (!hud.mission.title.trim()) violations.push(`mission ${hud.mission.kind} has no title`);
+      if ([...hud.mission.hint].length > HINT_MAX) violations.push(`hint too long: ${hud.mission.hint}`);
+      if ([...hud.mission.title].length > TITLE_MAX) violations.push(`title too long: ${hud.mission.title}`);
       if (!(hud.mission.timeLeft >= 0 && hud.mission.timeLeft <= 1)) violations.push(`timeLeft ${hud.mission.timeLeft}`);
       const p = hud.mission.progress;
       if (p !== null && !(p >= 0 && p <= 1)) violations.push(`progress ${p}`);
     }
+    if ([...hud.status].length > STATUS_MAX) violations.push(`status too long: ${hud.status}`);
     if (hud.progress !== null && !(hud.progress >= 0 && hud.progress <= 1)) violations.push(`gig progress ${hud.progress}`);
     if (!Number.isFinite(hud.score)) violations.push(`score ${hud.score}`);
     if (violations.length > 50) violations.length = 50;

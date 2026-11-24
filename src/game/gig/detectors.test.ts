@@ -29,8 +29,9 @@ describe('dead air', () => {
     expect(edges).toEqual(['start']);
     // 3 more seconds
     for (let i = 0; i < 180; i++) d.update(1 / 60, false);
-    expect(d.activeSec).toBeCloseTo(3, 1);
-    expect(d.totalSec).toBeCloseTo(1.5 + 3 + 1 / 60, 1);
+    // the frames after the call within the last 12 count too
+    expect(Math.abs(d.activeSec - 3.08)).toBeLessThan(0.03);
+    expect(Math.abs(d.totalSec - (d.activeSec + 1.5))).toBeLessThan(0.03);
     d.snooze();
     expect(d.activeSec).toBe(0);
     expect(d.update(1 / 60, true)).toBe('end');
