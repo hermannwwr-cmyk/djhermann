@@ -14,7 +14,6 @@ import { MAX_PLAYERS, RoomError, STATS_HZ } from '../../core/party';
 import type {
   BoardEntry,
   ErrorCode,
-  GameParams,
   HostMsg,
   PartyStore,
   PlayerInfo,
@@ -31,7 +30,7 @@ import type {
   RoomPhase,
   RoomStatus,
 } from '../../core/party';
-import type { AudioEngine, DeckId, Difficulty, GigResults, RhythmStats } from '../../core/types';
+import type { AudioEngine, DeckId, Difficulty, GameParams, GigResults, RhythmStats } from '../../core/types';
 import { createMockEngine } from '../../dev/mock-engine';
 import type { MockEngine } from '../../dev/mock-engine';
 import { MOCK_CATALOG, mockTrack } from '../../dev/mocks';

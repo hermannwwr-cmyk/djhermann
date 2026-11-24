@@ -6,8 +6,9 @@
  *
  * Tap anywhere on the reveal to skip the ceremony.
  */
-import { House, Play, RotateCcw, Sparkles, Star, Trophy, VolumeX, Waves, Zap } from 'lucide-static';
+import { House, Play, RotateCcw, Sparkles, Star, Trophy, Users, VolumeX, Waves, Zap } from 'lucide-static';
 import { easeOutCubic, formatTime } from '../../core/math';
+import type { BoardEntry } from '../../core/party';
 import type { AppContext, GameParams, GigResults, Grade, MissionRating, Screen, ScreenParams } from '../../core/types';
 import { COLORS, fitCanvas, font, rgba } from '../../theme/theme';
 import { add, h, icon, prefersReducedMotion } from './dom';
@@ -15,7 +16,8 @@ import type { Child } from './dom';
 import { DIFFICULTY_COPY, countsForBest, formatPercent, formatScore, isNewBest } from './logic';
 import { buzz, playUi, shared } from './shared';
 import { tween } from './ticker';
-import { dismissTopLayer } from './ui';
+import { confirmDialog, dismissTopLayer } from './ui';
+import { renderBoardList } from '../party/board';
 
 type Kind = 'win' | 'left' | 'tutorial';
 
@@ -35,6 +37,7 @@ const T = { ring: 250, grade: 900, stars: 1250, starStep: 140, score: 1300, scor
 export function createResultsScreen(ctx: AppContext): Screen<ScreenParams['results']> {
   const { nav, settings, engine } = ctx;
   const el = h('div', 'sc-screen sc-res');
+  let partyGig = false;
   const scroll = h('div', 'sc-res__scroll ui-scroll');
   const foot = h('footer', 'sc-foot sc-foot--row sc-res__foot');
   add(el, h('div', 'sc-res__bgglow'), scroll, foot);
@@ -218,8 +221,25 @@ export function createResultsScreen(ctx: AppContext): Screen<ScreenParams['resul
 
   // ───────────── build ─────────────
 
-  function build(r: GigResults, params: GameParams): void {
+  /** Party gig: leaving the results for home ends the party for everyone, so ask first. */
+  async function partyHome(): Promise<void> {
+    if (ctx.party.room) {
+      const ok = await confirmDialog(el, {
+        title: 'End the party?',
+        body: 'Everyone else’s phone leaves the party too.',
+        confirm: 'End party',
+        cancel: 'Stay',
+        danger: true,
+      });
+      if (!ok) return;
+      ctx.party.leave();
+    }
+    nav.go('home');
+  }
+
+  function build(r: GigResults, params: GameParams, board?: BoardEntry[]): void {
     const kind: Kind = params.tutorial ? 'tutorial' : r.completed ? 'win' : 'left';
+    partyGig = !!params.party;
     el.dataset.kind = kind;
     el.dataset.grade = r.grade;
     el.classList.remove('sc-res--go', 'sc-res--instant', 'sc-res--best-on');
@@ -274,6 +294,16 @@ export function createResultsScreen(ctx: AppContext): Screen<ScreenParams['resul
 
     // ── the breakdown ──
     const rest = h('div', 'sc-res__rest');
+    if (board && board.length > 0) {
+      rest.appendChild(
+        h(
+          'section',
+          'sc-section sc-res__section pt-resboard',
+          h('div', 'sc-section__head', h('h2', 'sc-h', 'Party leaderboard'), h('span', 'sc-count', `${board.length} playing`)),
+          renderBoardList(board, ctx.party.room?.pid ?? ''),
+        ),
+      );
+    }
     if (kind === 'left') rest.appendChild(whatWentWrong(r));
     add(
       rest,
@@ -296,19 +326,23 @@ export function createResultsScreen(ctx: AppContext): Screen<ScreenParams['resul
     homeBtn.type = 'button';
     homeBtn.dataset.act = 'home';
     homeBtn.setAttribute('aria-label', 'Home');
-    homeBtn.addEventListener('click', () => nav.go('home'));
-    const mainLabel = kind === 'tutorial' ? 'PLAY YOUR FIRST GIG' : kind === 'left' ? 'TRY AGAIN' : 'PLAY AGAIN';
+    homeBtn.addEventListener('click', () => (partyGig ? void partyHome() : nav.go('home')));
+    const mainLabel = partyGig ? 'BACK TO LOBBY' : kind === 'tutorial' ? 'PLAY YOUR FIRST GIG' : kind === 'left' ? 'TRY AGAIN' : 'PLAY AGAIN';
     const main = h(
       'button',
       'ui-btn ui-btn--primary ui-btn--lg sc-res__again',
-      icon(kind === 'tutorial' ? Play : RotateCcw, kind === 'tutorial' ? 'sc-fillicon' : ''),
+      icon(partyGig ? Users : kind === 'tutorial' ? Play : RotateCcw, kind === 'tutorial' ? 'sc-fillicon' : ''),
       h('span', null, mainLabel),
     );
     main.type = 'button';
     main.dataset.act = kind === 'tutorial' ? 'first-gig' : 'again';
     main.addEventListener('click', () => {
       buzz(settings, 12);
-      if (kind === 'tutorial') nav.go('setup');
+      if (partyGig) {
+        if (ctx.party.room) nav.go('lobby');
+        else nav.go('party', {});
+      }
+      else if (kind === 'tutorial') nav.go('setup');
       else nav.go('game', params);
     });
     add(foot, homeBtn, main);
@@ -350,7 +384,7 @@ export function createResultsScreen(ctx: AppContext): Screen<ScreenParams['resul
     el,
     enter(p) {
       clearTimers();
-      build(p.results, p.params);
+      build(p.results, p.params, p.board);
     },
     leave() {
       clearTimers();
@@ -359,7 +393,8 @@ export function createResultsScreen(ctx: AppContext): Screen<ScreenParams['resul
     },
     back() {
       if (dismissTopLayer(el)) return true;
-      nav.go('home');
+      if (partyGig && ctx.party.room) nav.go('lobby');
+      else nav.go('home');
       return true;
     },
   };

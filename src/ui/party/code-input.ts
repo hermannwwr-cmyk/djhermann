@@ -88,7 +88,9 @@ export function createCodeInput(opts: CodeInputOptions = {}): CodeInput {
       opts.onSubmit?.();
     }
   });
-  const sync = (): void => el.classList.toggle('pt-code--focus', document.activeElement === input);
+  const sync = (): void => {
+    el.classList.toggle('pt-code--focus', document.activeElement === input);
+  };
   input.addEventListener('focus', () => {
     sync();
     try {

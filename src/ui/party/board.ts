@@ -21,6 +21,11 @@ export interface BoardChipDeps {
   getBoard: () => BoardEntry[];
   /** this phone's player id (its row is highlighted and always shown) */
   myPid: string;
+  /**
+   * 'column' (default): a small stack for a corner of the playfield. 'row': a full-width strip of
+   * pills (a player's screen has no console, so the board gets its own row under the top bar).
+   */
+  layout?: 'column' | 'row';
 }
 
 /** rows shown at most */
@@ -42,8 +47,9 @@ interface ChipRow {
 }
 
 export function createBoardChip(deps: BoardChipDeps): Component {
+  const row = deps.layout === 'row';
   const list = h('div', 'pt-chip__list');
-  const el = h('div', 'pt-chip', list);
+  const el = h('div', `pt-chip${row ? ' pt-chip--row' : ''}`, list);
   el.setAttribute('role', 'status');
   el.setAttribute('aria-label', 'Leaderboard');
   el.hidden = true;
@@ -57,9 +63,9 @@ export function createBoardChip(deps: BoardChipDeps): Component {
       const rank = h('span', 'pt-chip__rank ui-num');
       const name = h('span', 'pt-chip__name');
       const score = h('span', 'pt-chip__score ui-num');
-      const row = h('div', 'pt-chip__row', rank, name, score);
-      list.appendChild(row);
-      r = { el: row, rank, name, score, key: '', index: -1 };
+      const rowEl = h('div', 'pt-chip__row', rank, name, score);
+      list.appendChild(rowEl);
+      r = { el: rowEl, rank, name, score, key: '', index: -1 };
       rows.set(e.pid, r);
     }
     return r;
@@ -73,6 +79,7 @@ export function createBoardChip(deps: BoardChipDeps): Component {
     shownSig = sig;
     // a board of one is no race: show it once there is someone to race
     el.hidden = ranked.length < 2;
+    el.dataset.n = String(shown.length);
     const keep = new Set<string>();
     shown.forEach((e, i) => {
       keep.add(e.pid);
@@ -97,7 +104,7 @@ export function createBoardChip(deps: BoardChipDeps): Component {
           r.el.classList.add('pt-chip__row--up');
         }
         r.index = i;
-        r.el.style.transform = `translateY(${i * ROW_H}px)`;
+        r.el.style.transform = row ? `translateX(calc(${i} * (100% + 4px)))` : `translateY(${i * ROW_H}px)`;
       }
     });
     for (const [pid, r] of rows) {
@@ -106,7 +113,8 @@ export function createBoardChip(deps: BoardChipDeps): Component {
         rows.delete(pid);
       }
     }
-    list.style.height = `${shown.length * ROW_H}px`;
+    if (row) list.style.setProperty('--n', String(shown.length));
+    else list.style.height = `${shown.length * ROW_H}px`;
   }
 
   return {

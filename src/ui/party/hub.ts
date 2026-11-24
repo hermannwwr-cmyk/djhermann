@@ -72,24 +72,25 @@ export function createHubScreen(ctx: AppContext): Screen<ScreenParams['party']> 
     diff.el,
   );
 
-  // ── host ──
-  const hostBtn = h('button', 'ui-btn ui-btn--lg ui-btn--block pt-go', h('span', null, 'Host a party'), icon(ArrowRight));
+  // ── host: the whole card is the button ──
+  const hostArrow = h('span', 'pt-card__arrow', icon(ArrowRight));
+  const hostLine = h('span', 'pt-card__line', 'This phone plays the music. Best with a speaker.');
+  const hostBtn = h(
+    'button',
+    'pt-card pt-card--host pt-card--tap',
+    h(
+      'span',
+      'pt-card__head',
+      h('span', 'pt-card__icon', icon(Speaker)),
+      h('span', 'pt-card__text', h('span', 'pt-card__title', 'HOST A PARTY'), hostLine),
+      hostArrow,
+    ),
+  );
   hostBtn.type = 'button';
   hostBtn.dataset.act = 'host';
   const hostErr = h('div', 'pt-err');
   hostErr.setAttribute('role', 'alert');
-  const hostCard = h(
-    'section',
-    'pt-card pt-card--host',
-    h(
-      'div',
-      'pt-card__head',
-      h('span', 'pt-card__icon', icon(Speaker)),
-      h('span', 'pt-card__text', h('span', 'pt-card__title', 'HOST A PARTY'), h('span', 'pt-card__line', 'This phone plays the music. Best with a speaker.')),
-    ),
-    hostErr,
-    hostBtn,
-  );
+  const hostCard = h('div', 'pt-hub__host', hostBtn, hostErr);
 
   // ── join ──
   const joinBtn = h('button', 'ui-btn ui-btn--lg ui-btn--block pt-go', h('span', null, 'Join'), icon(ArrowRight));
@@ -103,7 +104,7 @@ export function createHubScreen(ctx: AppContext): Screen<ScreenParams['party']> 
       showError(joinErr, null);
       paintJoin();
       const problem = codeProblem(c);
-      if (problem === 'letters') {
+      if (badLetters(c).length > 0) {
         code.reject();
         showError(joinErr, { title: 'Check the letters', body: `Party codes never use ${badLetters(c).join(' or ')}.` });
       } else if (typed && problem === null) {
@@ -134,7 +135,7 @@ export function createHubScreen(ctx: AppContext): Screen<ScreenParams['party']> 
     'pt-hub__hero',
     art(HERO_ART, 'pt-hub__art'),
     h('h1', 'pt-hub__title', 'Play ', h('span', 'ui-aurora-text', 'together')),
-    h('p', 'pt-hub__line', 'One phone plays the music. Everyone else plays the pads on their own phone.'),
+    h('p', 'pt-hub__line', 'One phone plays the music. Everyone plays the pads.'),
   );
   const cards = h('div', 'pt-hub__cards');
   add(body, hero, you, cards);
@@ -144,21 +145,22 @@ export function createHubScreen(ctx: AppContext): Screen<ScreenParams['party']> 
   function showError(box: HTMLElement, copy: { title: string; body: string } | null): void {
     box.replaceChildren();
     box.classList.toggle('pt-err--on', !!copy);
-    if (copy) add(box, icon(CircleAlert), h('p', null, h('b', null, copy.title), ' ', copy.body));
+    if (!copy) return;
+    add(box, icon(CircleAlert), h('p', null, h('b', null, copy.title), ' ', copy.body));
+    // the message must be seen, also with the keyboard up
+    requestAnimationFrame(() => box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
   }
 
   function setBusy(which: 'host' | 'join' | null): void {
     busy = which;
     el.classList.toggle('pt-hub--busy', !!which);
-    for (const [b, w, label] of [
-      [hostBtn, 'host', 'Host a party'],
-      [joinBtn, 'join', 'Join'],
-    ] as const) {
-      b.replaceChildren(
-        ...(which === w ? [icon(LoaderCircle, 'pt-spin'), h('span', null, 'Connecting')] : [h('span', null, label), icon(ArrowRight)]),
-      );
-      b.disabled = !!which;
-    }
+    joinBtn.replaceChildren(
+      ...(which === 'join' ? [icon(LoaderCircle, 'pt-spin'), h('span', null, 'Joining')] : [h('span', null, 'Join'), icon(ArrowRight)]),
+    );
+    joinBtn.disabled = !!which;
+    hostBtn.disabled = !!which;
+    hostArrow.replaceChildren(icon(which === 'host' ? LoaderCircle : ArrowRight, which === 'host' ? 'pt-spin' : ''));
+    hostLine.textContent = which === 'host' ? 'Starting your party…' : 'This phone plays the music. Best with a speaker.';
     paintJoin();
   }
 
@@ -235,7 +237,8 @@ export function createHubScreen(ctx: AppContext): Screen<ScreenParams['party']> 
       invite.replaceChildren();
       if (invited) add(invite, 'You’re invited to party ', h('b', null, invited), '. Check your name, then tap JOIN.');
       el.classList.toggle('pt-hub--invited', !!invited);
-      // an invite puts JOIN first; otherwise the DJ (usually the first one here) sees HOST first
+      // an invite goes straight to who you are and JOIN (hosting is still there, below)
+      hero.hidden = !!invited;
       cards.replaceChildren(...(invited ? [joinCard, hostCard] : [hostCard, joinCard]));
       paintJoin();
       body.scrollTop = 0;

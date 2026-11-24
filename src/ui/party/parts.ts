@@ -8,7 +8,7 @@ import type { Difficulty } from '../../core/types';
 import { add, button, h, icon } from '../screens/dom';
 import type { Child } from '../screens/dom';
 import { DIFFICULTIES } from '../screens/logic';
-import { cleanName, initial, suggestName } from './logic';
+import { cleanName, initial, roomParam, suggestName } from './logic';
 
 /** What the party screens remember for as long as the page is open. */
 export const partySession = {
@@ -166,4 +166,26 @@ export function waitingBars(): HTMLElement {
   const e = h('span', 'pt-eq', h('i'), h('i'), h('i'), h('i'));
   e.setAttribute('aria-hidden', 'true');
   return e;
+}
+
+let inviteTaken = false;
+
+/**
+ * The room code the page was opened with (?room=CODE), once per page load; the parameter is
+ * removed from the address bar so a reload or a later visit home does not join again.
+ */
+export function takeRoomInvite(): string | null {
+  if (inviteTaken || typeof location === 'undefined') return null;
+  inviteTaken = true;
+  const code = roomParam(location.search);
+  if (new URLSearchParams(location.search).has('room')) {
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('room');
+      history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+    } catch {
+      /* history unavailable: harmless */
+    }
+  }
+  return code;
 }

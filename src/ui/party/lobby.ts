@@ -149,6 +149,7 @@ export function createLobbyScreen(ctx: AppContext): Screen<undefined> {
       }
       playersBox.appendChild(empty);
     }
+    playersBox.classList.toggle('pt-players--many', list.length > 4);
     known = new Set(list.map((p) => p.pid));
     playersCount.textContent = `${list.length} of ${MAX_PLAYERS}`;
     renderFoot();
@@ -290,7 +291,7 @@ export function createLobbyScreen(ctx: AppContext): Screen<undefined> {
     again.dataset.act = 'party';
     again.addEventListener('click', () => {
       party.leave();
-      nav.go('party');
+      nav.go('party', {});
     });
     banner.replaceChildren();
     banner.className = 'pt-banner';
@@ -341,8 +342,8 @@ export function createLobbyScreen(ctx: AppContext): Screen<undefined> {
     setPicker = null;
     body.replaceChildren(
       codeBlock(r),
-      r.role === 'host' ? hostSettings() : playerSettings(r),
       h('section', 'sc-section', h('div', 'sc-section__head', h('h2', 'sc-h', 'Who’s here'), playersCount), playersBox),
+      r.role === 'host' ? hostSettings() : playerSettings(r),
     );
     el.dataset.role = r.role;
     renderPlayers();
@@ -361,7 +362,7 @@ export function createLobbyScreen(ctx: AppContext): Screen<undefined> {
         if (r) showEnded('not-found');
         else {
           ended = false;
-          window.setTimeout(() => nav.go('party'), 0);
+          window.setTimeout(() => nav.go('party', {}), 0);
         }
         return;
       }

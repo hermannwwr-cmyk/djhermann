@@ -15,7 +15,7 @@ export const HOST = {
   /** a full board is re-sent at least this often even when nothing changed (late joiners, lost state) */
   boardRefreshMs: 5000,
   /** send an extra tick when the players' extrapolation would be off by more than this (s) */
-  driftSec: 0.004,
+  driftSec: 0.002,
   /** …but never two ticks closer than this */
   minTickGapMs: 25,
 } as const;
@@ -95,7 +95,7 @@ export function createHostLink(deps: HostLinkDeps): HostLinkImpl {
 
   const midGig = (): boolean => room.phase === 'loading' || room.phase === 'playing';
 
-  function onPlayers(players: PlayerInfo[]): void {
+  function onPlayers(players: PlayerInfo[], initial = false): void {
     const next = new Map<string, boolean>();
     for (const p of players) {
       if (p.role !== 'player') continue;
@@ -103,7 +103,7 @@ export function createHostLink(deps: HostLinkDeps): HostLinkImpl {
       known.set(p.pid, p);
       const was = lastPlayers.get(p.pid);
       // joined, or came back: they may have missed tracks
-      if (p.connected && was !== true && midGig() && !finished) sendTracks(p.pid);
+      if (!initial && p.connected && was !== true && midGig() && !finished) sendTracks(p.pid);
     }
     for (const [pid, info] of known) {
       if (!next.has(pid) && info.connected) known.set(pid, { ...info, connected: false });
@@ -111,8 +111,7 @@ export function createHostLink(deps: HostLinkDeps): HostLinkImpl {
     lastPlayers = next;
     playersDirty = true;
   }
-  onPlayers(room.players);
-  // players already in the room when the gig started have no tracks yet unless they were cast above
+  onPlayers(room.players, true); // they got the tracks above
   offs.push(
     room.on('players', ({ players }) => onPlayers(players)),
     room.on('phase', ({ phase }) => {
@@ -248,7 +247,7 @@ export function createHostLink(deps: HostLinkDeps): HostLinkImpl {
       if (a.trackId !== b.trackId || a.playing !== b.playing || a.scratching !== b.scratching) return true;
       const predicted = a.pos + ((frame.now - lastSent.perf) / 1000) * a.rate;
       if (Math.abs(predicted - b.pos) > HOST.driftSec) return true;
-      if (Math.abs(a.audibility - b.audibility) > 0.1) return true;
+      if (Math.abs(a.audibility - b.audibility) > 0.1 || Math.abs(a.tempo - b.tempo) > 0.0005) return true;
     }
     return false;
   }
@@ -293,8 +292,8 @@ export function createHostLink(deps: HostLinkDeps): HostLinkImpl {
     urgent = false;
     lastTickPerf = now;
     lastSent = { perf: now, decks, live: frame.liveDeck };
-    // keep the regular cadence; after a stall, start again from now
-    nextTick = now >= nextTick + HOST.tickMs ? now + HOST.tickMs : Math.max(nextTick + HOST.tickMs, now + HOST.minTickGapMs);
+    // keep the regular cadence (extra ticks in between don't move it); after a stall, restart from now
+    if (now >= nextTick) nextTick = now >= nextTick + HOST.tickMs ? now + HOST.tickMs : nextTick + HOST.tickMs;
   }
 
   return {

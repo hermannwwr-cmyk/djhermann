@@ -41,7 +41,7 @@ export function createControllerScreen(ctx: AppContext, net: PartyNet): Screen<u
     session = null;
     const room = ctx.party.room;
     if (!room || room.status === 'closed') {
-      window.setTimeout(() => ctx.nav.go(room ? 'lobby' : 'party'), 0);
+      window.setTimeout(() => (room ? ctx.nav.go('lobby') : ctx.nav.go('party', {})), 0);
       return;
     }
     session = startSession(ctx, net, el, room, start);
@@ -80,8 +80,8 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
   host.replaceChildren();
   const root = div('pt-ctl__root', host);
   const topSlot = div('pt-ctl__top', root);
+  const boardSlot = div('pt-ctl__board', root);
   const playSlot = div('pt-ctl__play', root);
-  const chipSlot = div('pt-ctl__chip', playSlot);
   const stateSlot = div('pt-ctl__state', playSlot);
   const overlay = div('pt-ctl__overlay', root);
 
@@ -102,7 +102,12 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
     hud.hype = r?.hype ?? 0.5;
     hud.progress = r?.progress ?? null;
     hud.set = r?.set ?? null;
-    hud.status = state === 'paused' ? 'THE DJ PAUSED THE MUSIC' : djLine(r);
+    hud.status =
+      state === 'paused'
+        ? 'THE DJ PAUSED THE MUSIC'
+        : state === 'host-lost' || state === 'reconnecting' || state === 'waiting'
+          ? 'WAITING FOR THE DJ'
+          : djLine(r);
     return hud;
   };
   const loop: FrameLoop = createFrameLoop(remote, getHud);
@@ -114,13 +119,20 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
     exitBtn.setAttribute('aria-label', 'Leave the party');
     exitBtn.querySelector('.hud-pausebtn__face')?.replaceChildren(icon(LogOut, 'pt-exiticon'));
   }
-  const chip = createBoardChip({ getBoard: () => remote.board, myPid: room.pid });
+  const chip = createBoardChip({ getBoard: () => remote.board, myPid: room.pid, layout: 'row' });
   const loading = createLoadingOverlay();
   overlay.appendChild(loading.el);
+  // the wait can be long (the DJ is still choosing): there is always a way out
+  const waitLeave = button({ className: 'sc-chipbtn pt-ctl__waitleave', icon: LogOut, label: 'Leave' });
+  waitLeave.dataset.act = 'leave';
+  waitLeave.addEventListener('click', () => void askLeave());
+  waitLeave.hidden = true;
+  overlay.appendChild(waitLeave);
+  const djName = (): string => hostOf(room.players)?.name ?? 'The DJ';
 
   topSlot.appendChild(topBar.el);
-  playSlot.insertBefore(rhythm.el, chipSlot);
-  chipSlot.appendChild(chip.el);
+  playSlot.insertBefore(rhythm.el, stateSlot);
+  boardSlot.appendChild(chip.el);
 
   // ── the stage follows the music: sections of the live track light the crowd ──
   let lastSection = '';
@@ -168,7 +180,8 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
   function setLoading(on: boolean): void {
     if (on === loadingShown) return;
     loadingShown = on;
-    if (on) loading.show('The DJ is getting the music ready');
+    waitLeave.hidden = !on;
+    if (on) loading.show(`${djName()} is getting the music ready`);
     else void loading.hide();
   }
 
@@ -182,8 +195,8 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
       const step = f.hasTrack ? 1 : 0;
       if (step !== lastWaitStep) {
         lastWaitStep = step;
-        if (step === 0) loading.set(0.3, 'The DJ is getting the music ready');
-        else loading.set(0.75, 'Ready. Waiting for the music to start');
+        if (step === 0) loading.set(0.3, `${djName()} is getting the music ready`);
+        else loading.set(0.75, `Ready. Waiting for ${djName()} to start the music`);
       }
     }
     if (next === state) return;
@@ -330,7 +343,7 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
       h(
         'section',
         'sc-section',
-        h('div', 'sc-section__head', h('h2', 'sc-h', 'The board'), h('span', 'sc-count', `crowd gave the set ${results.grade}`)),
+        h('div', 'sc-section__head', h('h2', 'sc-h', 'The board'), h('span', 'sc-count', `The set got an ${results.grade}`)),
         renderBoardList(board, room.pid),
       ),
     );
@@ -362,7 +375,7 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
       party.leave();
       nav.go('home');
     });
-    stateSlot.replaceChildren(stateCard({ icon: code === 'network' ? WifiOff : LogOut, tone: 'bad', title: copy.title, body: copy.body, actions: [homeBtn] }));
+    stateSlot.replaceChildren(stateCard({ icon: LogOut, tone: 'bad', title: copy.title, body: copy.body, actions: [homeBtn] }));
     stateSlot.classList.add('pt-ctl__state--on', 'pt-ctl__state--solid');
   }
 
