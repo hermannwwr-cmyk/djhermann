@@ -26,7 +26,8 @@ const nextTick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 async function renderHere(id: string, sampleRate: number, onProgress?: ProgressFn): Promise<PcmData> {
   const song = songById(id);
   if (!song) throw new Error(`unknown built-in track "${id}"`);
-  const job = createTrackJob(song, sampleRate);
+  // one bar per step keeps every slice short enough for the UI to keep animating
+  const job = createTrackJob(song, sampleRate, { chunkBars: 1 });
   for (;;) {
     const t0 = now();
     let finished = false;

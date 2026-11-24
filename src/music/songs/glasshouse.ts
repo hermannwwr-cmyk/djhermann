@@ -39,8 +39,8 @@ export default defineSong({
   },
   bass: {
     p: { sub: 1, mid: 0.5, shape: 'saw', midOct: 1, cutoff: 380, env: 2.2, envDecay: 0.06, q: 1.1, drive: 1.5, release: 0.03 },
-    groove: 'x - - - | - - - - | x - - - | - - - -',
-    drop: 'x - . x | - . x - | . . x - | x - . .',
+    groove: 'x - - - | - - . . | x - - - | - - . .',
+    drop: 'x - - x | - - x - | - - x - | x - - -',
   },
   chords: {
     saw: { detune: 0.013, seed: 81 },
@@ -74,6 +74,6 @@ export default defineSong({
   cut: { intro: [500, 2000], groove: 2600, build: [1500, 13000], breakdown: [650, 3400], outro: 600 },
   mix: baseMix(
     { chords: { trim: 1, duck: 0.6 }, lead: { trim: 2 }, pluck: { trim: 2 } },
-    { reverb: { decay: 0.7, damping: 0.35, preDelay: 0.02, returnDb: -5, duck: 0.5 }, delay: { beats: 0.5, feedback: 0.35, damp: 0.4, returnDb: -10, toReverb: 0.2 }, masterDb: -0.6 },
+    { reverb: { decay: 0.7, damping: 0.35, preDelay: 0.02, returnDb: -5, duck: 0.5 }, delay: { beats: 0.5, feedback: 0.35, damp: 0.4, returnDb: -10, toReverb: 0.2 }, masterDb: -1.5 },
   ),
 });

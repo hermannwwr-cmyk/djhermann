@@ -5,7 +5,7 @@
  */
 import type { PcmData, SoundName } from '../core/types';
 import { rng } from '../core/math';
-import { Svf, TABLE_SIZE, TAU, fade, filter, midiToHz, noise, normPeak, softSat, stereo, waveTable } from './dsp';
+import { Svf, TABLE_SIZE, TAU, fade, filter, midiToHz, noise, normPeak, normRms, peakOf, softSat, stereo, waveTable } from './dsp';
 import type { Sample } from './dsp';
 import { bell, clap, snap } from './synth';
 
@@ -25,20 +25,25 @@ export const SOUND_PEAK: Record<SoundName, number> = {
   whoosh: 0.5,
 };
 
-/** 808-style sub drop with an impact crack on top. */
+/**
+ * 808-style sub drop with an impact on top. The sub alone would vanish on a phone speaker, so a
+ * saturated octave-up body and a noisy crack carry it into the mids.
+ */
 function boom(sr: number): Sample {
   const n = frames(1.15, sr);
   const out = new Float32Array(n);
-  const crack = filter(noise(frames(0.12, sr), 8080), 'bp', 1800, 0.8, sr);
+  const crack = filter(filter(noise(frames(0.15, sr), 8080), 'lp', 4500, 0.7, sr), 'hp', 300, 0.7, sr);
   for (let i = 0; i < n; i++) {
     const t = i / sr;
-    // pitch falls from 160 Hz to 44 Hz: phase = integral of the frequency
-    const ph = TAU * (44 * t + 116 * 0.07 * (1 - Math.exp(-t / 0.07)));
-    const env = Math.exp(-t / 0.42) * Math.min(1, i / 8);
-    // saturation adds the harmonics a phone speaker can play
-    let x = softSat(Math.sin(ph) * env * 1.4, 2.2) * 0.8;
-    if (i < crack.length) x += crack[i] * 1.6 * Math.exp(-t / 0.025);
-    x += Math.sin(TAU * 900 * t) * Math.exp(-t / 0.004) * 0.5;
+    // pitch falls from 170 Hz to 46 Hz: phase = integral of the frequency
+    const ph = TAU * (46 * t + 124 * 0.06 * (1 - Math.exp(-t / 0.06)));
+    const env = Math.exp(-t / 0.38) * Math.min(1, i / 8);
+    const sub = Math.sin(ph) * env;
+    // octave-up body, driven hard: the part a small speaker can play
+    const body = softSat(Math.sin(2 * ph + 0.4) * 3, 3) * Math.exp(-t / 0.2) * 0.62;
+    let x = softSat(sub * 1.8, 2.2) * 0.85 + body;
+    if (i < crack.length) x += crack[i] * 1.5 * Math.exp(-t / 0.035);
+    x += Math.sin(TAU * 1100 * t) * Math.exp(-t / 0.005) * 0.45;
     out[i] = x;
   }
   const s = stereo(out, out.slice());
@@ -165,18 +170,27 @@ function success(sr: number): Sample {
   return fade(stereo(l, r), 0, frames(0.12, sr));
 }
 
-/** Low, soft thud with a muted falling tone. */
+/**
+ * Low, soft thud with a muted falling minor third on top (G4 → E4, rounded triangle-ish tone), so
+ * it reads as "not quite" on a phone speaker without being harsh.
+ */
 function fail(sr: number): Sample {
-  const n = frames(0.45, sr);
+  const n = frames(0.5, sr);
   const out = new Float32Array(n);
-  const nz = filter(noise(n, 6060), 'lp', 500, 0.7, sr);
+  const nz = filter(noise(n, 6060), 'lp', 600, 0.7, sr);
+  const tone = new Svf();
+  tone.set(1500, 0.7, sr);
+  let ph = 0;
   for (let i = 0; i < n; i++) {
     const t = i / sr;
-    const ph = TAU * (62 * t + 50 * 0.06 * (1 - Math.exp(-t / 0.06)));
-    out[i] = Math.sin(ph) * Math.exp(-t / 0.13) * Math.min(1, i / 24) + nz[i] * 0.6 * Math.exp(-t / 0.03) + Math.sin(TAU * 196 * t * (1 - 0.15 * t)) * 0.18 * Math.exp(-t / 0.09);
+    const thud = Math.sin(TAU * (70 * t + 60 * 0.05 * (1 - Math.exp(-t / 0.05)))) * Math.exp(-t / 0.12) * Math.min(1, i / 24);
+    const f = t < 0.13 ? midiToHz(67) : midiToHz(64);
+    ph += f / sr;
+    const tri = 1 - 4 * Math.abs((ph % 1) - 0.5);
+    const tenv = t < 0.13 ? Math.exp(-t / 0.09) * Math.min(1, i / 48) : 0.85 * Math.exp(-(t - 0.13) / 0.12) * Math.min(1, (t - 0.13) / 0.012) + Math.exp(-t / 0.09) * Math.max(0, 1 - (t - 0.13) / 0.012);
+    out[i] = thud * 0.8 + nz[i] * 0.5 * Math.exp(-t / 0.025) + tone.lp(tri) * tenv * 0.55;
   }
-  const s = stereo(out, out.slice());
-  return fade(s, 0, frames(0.08, sr));
+  return fade(stereo(out, out.slice()), 0, frames(0.08, sr));
 }
 
 /** Crowd swell: many voices (noise through moving vowel formants) and scattered claps. */
@@ -199,7 +213,7 @@ function cheer(sr: number): Sample {
     const f2 = new Svf();
     const rate = 3 + rand() * 5;
     const phase = rand() * TAU;
-    const start = rand() * 0.25;
+    const start = v === 0 ? 0 : rand() * 0.25;
     const pan = rand();
     for (let i = 0; i < n; i++) {
       const t = i / sr;
@@ -209,10 +223,39 @@ function cheer(sr: number): Sample {
         f2.set(b * shift * wob, 7, sr);
       }
       const am = 0.6 + 0.4 * Math.sin(TAU * rate * t + phase);
-      const env = t < start ? 0 : Math.min(1, (t - start) / 0.35) * (t > len - 0.6 ? Math.max(0, (len - t) / 0.6) : 1);
+      const env = t < start ? 0 : (v === 0 ? 0.35 + 0.65 * Math.min(1, t / 0.35) : Math.min(1, (t - start) / 0.35)) * (t > len - 0.6 ? Math.max(0, (len - t) / 0.6) : 1);
       const y = (f1.bp(src[i]) + f2.bp(src[i]) * 0.6) * am * env;
       chans[0][i] += y * (1 - pan);
       chans[1][i] += y * pan;
+    }
+  }
+  // a few voices shouting "wooo": saws gliding up through an "oo" formant pair
+  for (let v = 0; v < 4; v++) {
+    const f0 = 260 + rand() * 180;
+    const at = 0.08 + rand() * 0.3;
+    const dur = 0.7 + rand() * 0.4;
+    const table = waveTable('saw', f0 * 1.6, sr);
+    const fa = new Svf();
+    const fb = new Svf();
+    fa.set(420 * (1 + v * 0.08), 5, sr);
+    fb.set(1000 * (1 + v * 0.06), 6, sr);
+    const ch = chans[v & 1];
+    const other = chans[(v + 1) & 1];
+    let ph = rand();
+    const i0 = Math.floor(at * sr);
+    const m = Math.min(n - i0, Math.floor(dur * sr));
+    for (let i = 0; i < m; i++) {
+      const u = i / m;
+      const f = f0 * (1 + 0.45 * Math.min(1, u * 2.2)) * (1 + 0.012 * Math.sin(TAU * 6 * u * dur));
+      ph += f / sr;
+      if (ph >= 1) ph -= 1;
+      const x = ph * TABLE_SIZE;
+      const k = x | 0;
+      const sv = table[k] + (x - k) * (table[k + 1] - table[k]);
+      const env = Math.sin(Math.PI * u) ** 1.5 * 0.5;
+      const y = (fa.bp(sv) + fb.bp(sv) * 0.45) * env;
+      ch[i0 + i] += y * 0.75;
+      other[i0 + i] += y * 0.35;
     }
   }
   // applause: short bright bursts at random times, denser in the middle
@@ -235,7 +278,7 @@ function whoosh(sr: number): Sample {
   for (let i = 0; i < n; i++) {
     const u = i / n;
     if ((i & 31) === 0) f.set(300 * Math.pow(20, Math.sin(Math.PI * Math.pow(u, 0.8))), 1.8, sr);
-    const env = Math.sin(Math.PI * Math.pow(u, 0.7)) ** 2;
+    const env = 0.12 * (1 - u) + 0.88 * Math.sin(Math.PI * Math.pow(u, 0.7)) ** 2;
     const y = f.bp(src[i]) * env;
     const p = 0.15 + 0.7 * u;
     l[i] = y * Math.cos((p * Math.PI) / 2);
@@ -259,9 +302,19 @@ const MAKERS: Record<SoundName, (sr: number) => Sample> = {
 
 export const SOUND_NAMES = Object.keys(MAKERS) as SoundName[];
 
+/**
+ * The pads play over the music and must feel equally loud: each is set to the same loudest-50 ms
+ * RMS, unless that would push its peak past SOUND_PEAK.
+ */
+const PAD_RMS = 0.35;
+const PADS: readonly SoundName[] = ['boom', 'clap', 'zap', 'horn'];
+
 /** Float sample → 16-bit stereo PCM, normalised to the sound's peak. */
-export function toPcm(s: Sample, sr: number, peak: number): PcmData {
-  normPeak(s, peak);
+export function toPcm(s: Sample, sr: number, peak: number, rms?: number): PcmData {
+  if (rms !== undefined) {
+    normRms(s, rms, sr);
+    if (peakOf(s.l, s.r) > peak) normPeak(s, peak);
+  } else normPeak(s, peak);
   const r = s.r ?? s.l;
   const n = s.l.length;
   const a = new Int16Array(n);
@@ -274,5 +327,5 @@ export function toPcm(s: Sample, sr: number, peak: number): PcmData {
 }
 
 export function renderSound(name: SoundName, sr: number): PcmData {
-  return toPcm(MAKERS[name](sr), sr, SOUND_PEAK[name]);
+  return toPcm(MAKERS[name](sr), sr, SOUND_PEAK[name], PADS.includes(name) ? PAD_RMS : undefined);
 }

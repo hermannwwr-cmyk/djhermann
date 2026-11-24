@@ -124,7 +124,7 @@ describe('one-shot sounds', () => {
         expect(p.sampleRate).toBe(sr);
         expect(p.length / sr, name).toBeLessThanOrEqual(limits[name]);
         const pk = peakOf(p);
-        expect(pk, name).toBeGreaterThan(0.4);
+        expect(pk, name).toBeGreaterThan(0.3);
         expect(pk, name).toBeLessThanOrEqual(0.9);
         const ch = p.channels[0];
         // onset inside the first millisecond (cheer swells in, so it gets 30 ms)
@@ -136,6 +136,25 @@ describe('one-shot sounds', () => {
       }
     });
   }
+});
+
+describe('pad loudness', () => {
+  it('sets the four pads to the same short-term loudness unless the peak cap stops it', () => {
+    const sr = 48000;
+    const win = Math.round(0.05 * sr);
+    for (const name of ['boom', 'clap', 'zap', 'horn'] as const) {
+      const p = renderSound(name, sr);
+      let best = 0;
+      for (let from = 0; from + win <= p.length; from += win >> 1) {
+        let s = 0;
+        for (let i = from; i < from + win; i++) for (const ch of p.channels) s += (ch[i] / 32767) ** 2;
+        best = Math.max(best, Math.sqrt(s / win / 2));
+      }
+      const capped = peakOf(p) > 0.88;
+      if (!capped) expect(best, name).toBeCloseTo(0.35, 2);
+      else expect(best, name).toBeLessThanOrEqual(0.351);
+    }
+  });
 });
 
 describe('createBuiltinMusic', () => {

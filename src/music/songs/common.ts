@@ -213,7 +213,7 @@ export function baseMix(over: Partial<Record<StemId, BusTweak>> = {}, rest: Part
   const stems: Record<StemId, BusSettings> = {
     kick: bus(-5, 0, 0, 0, 0),
     drums: bus(-4.5, 160, 0.16, 0, 0),
-    tops: bus(-8, 450, 0.05, 0, 0.12),
+    tops: bus(-6, 450, 0.05, 0, 0.12),
     bass: bus(-10, 0, 0, 0, 0.9),
     chords: bus(-9.5, 190, 0.22, 0.04, 0.72),
     pluck: bus(-12, 220, 0.2, 0.26, 0.4),
@@ -265,15 +265,15 @@ export function defineSong(spec: SongSpec): SongDef {
       return s;
     };
     /** A whole chord as one sample: the notes' loops summed under an attack / hold / release envelope. */
-    const chordSound = (ch: Chord, len: number, attack: number, release: number): Sound =>
-      a.sound(`chord:${ch.notes.join(',')}:${len}:${attack}:${release}`, (e) => {
+    const chordSound = (chordNotes: number[], len: number, attack: number, release: number): Sound =>
+      a.sound(`chord:${chordNotes.join(',')}:${len}:${attack}:${release}`, (e) => {
         const hold = Math.round(len * sixteenth(e) * e.sr);
         const att = Math.max(1, Math.round(attack * e.sr));
         const rel = Math.max(1, Math.round(release * e.sr));
         const n = Math.max(hold, att) + rel;
         const l = new Float32Array(n);
         const r = new Float32Array(n);
-        ch.notes.forEach((midi, v) => {
+        chordNotes.forEach((midi, v) => {
           const s = sawLoop(e, midi);
           const size = s.l.length;
           let idx = Math.floor(((v * 0.381966 + 0.13) % 1) * size);
@@ -345,6 +345,11 @@ export function defineSong(spec: SongSpec): SongDef {
           if (h.sym === 'O') a2.hit('tops', kit.open, s + h.step, 0.5 * hum, { pan: -0.12 });
           else a2.hit('tops', kit.hat[(h.step >> 1) % 3], s + h.step, (h.sym === 'x' ? 0.5 : 0.27) * hum, { pan: 0.14 });
         }
+        if (ON_DROP(level) && !spec.drums.shaker) {
+          // drops get ghost sixteenths in the gaps of the hat pattern: brighter, busier tops
+          const used = new Set(hats.map((h) => h.step));
+          for (let i = 1; i < 16; i += 2) if (!used.has(i)) a2.hit('tops', kit.hat[(i >> 1) % 3], s + i, 0.16 * (0.85 + 0.3 * a2.rand()), { pan: 0.3 });
+        }
         const busy = ON_DROP(level) || (level === 'groove' && idx >= 4) || level === 'outroA';
         if (spec.drums.shaker && busy) {
           for (let i = 0; i < 16; i++) {
@@ -387,7 +392,9 @@ export function defineSong(spec: SongSpec): SongDef {
         const pat = ON_DROP(level) ? chDrop : level === 'groove' ? chGroove : HOLD_BAR;
         const stab = pat.length > 1;
         for (const h of pat) {
-          a2.hit('chords', chordSound(ch, h.len, stab ? 0.006 : 0.03, stab ? spec.chords.stabRelease ?? 0.06 : 0.14), s + h.step, 1, { swing: false });
+          a2.hit('chords', chordSound(ch.notes, h.len, stab ? 0.006 : 0.03, stab ? spec.chords.stabRelease ?? 0.06 : 0.14), s + h.step, 1, { swing: false });
+          // the drops stack the chord tones an octave up: wider, brighter, bigger
+          if (ON_DROP(level)) a2.hit('chords', chordSound(ch.tones.map((t) => t + 12), h.len, stab ? 0.006 : 0.03, stab ? spec.chords.stabRelease ?? 0.06 : 0.14), s + h.step, 0.4, { swing: false });
         }
       },
 

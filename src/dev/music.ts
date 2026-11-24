@@ -33,6 +33,9 @@ interface TrackResult {
   kickErrMs: Record<number, number | null>;
   mixKickErrMs: number | null;
   lowSideDb: number;
+  workerFrames: { frames: number; maxGapMs: number };
+  fallbackFrames: { frames: number; maxGapMs: number };
+  fallbackSame: boolean;
 }
 
 const music = createBuiltinMusic();
@@ -47,8 +50,11 @@ const store: Store = { tracks: {} };
 (window as unknown as { __music: Store }).__music = store;
 
 await loadFonts();
+// the game's base styles lock the page to the viewport; this page scrolls
+document.documentElement.style.cssText += ';height:auto;overflow:auto';
+document.body.style.cssText += ';height:auto;overflow:auto;position:static';
 const app = document.getElementById('app')!;
-app.style.cssText = `padding:20px 24px;color:${COLORS.ink};font:500 13px/1.45 Manrope,system-ui;min-height:100vh;background:${COLORS.bg0}`;
+app.style.cssText = `position:static;display:block;padding:20px 24px;color:${COLORS.ink};font:500 13px/1.45 Manrope,system-ui;min-height:100vh;background:${COLORS.bg0}`;
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, css = '', text = ''): HTMLElementTagNameMap[K] => {
   const el = document.createElement(tag);
   el.style.cssText = css;
@@ -161,6 +167,27 @@ function hashPcm(p: PcmData): string {
 
 const nextFrame = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
+/** Count animation frames until the returned function is called; also the longest gap between two. */
+function watchFrames(): () => { frames: number; maxGapMs: number } {
+  let frames = 0;
+  let last = performance.now();
+  let maxGapMs = 0;
+  let on = true;
+  const tick = (t: number): void => {
+    if (!on) return;
+    frames++;
+    maxGapMs = Math.max(maxGapMs, t - last);
+    last = t;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return () => {
+    on = false;
+    maxGapMs = Math.max(maxGapMs, performance.now() - last);
+    return { frames, maxGapMs };
+  };
+}
+
 // ───────────────────────────── drawing ─────────────────────────────
 
 const SECTION_COLORS: Record<string, string> = {
@@ -257,6 +284,53 @@ function drawTrack(meta: TrackMeta, p: PcmData, res: TrackResult): HTMLCanvasEle
   return c;
 }
 
+/** Bars 24–26: the music bus envelope (5 ms RMS) dipping under every kick. */
+function drawPump(meta: TrackMeta, music: PcmData, kick: Int16Array): HTMLCanvasElement {
+  const W = 1200;
+  const H = 150;
+  const c = h('canvas', `width:${W}px;height:${H}px;display:block;border-radius:12px;background:#08080d;margin-top:10px`);
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  const f0 = beatToFrame(meta.grid.bpm, SR, 24 * 4);
+  const f1 = beatToFrame(meta.grid.bpm, SR, 26 * 4);
+  const win = Math.round(0.005 * SR);
+  const env = (ch: Int16Array, ch2: Int16Array | null, x: number): number => {
+    const a = f0 + Math.floor(((f1 - f0) * x) / W) - (win >> 1);
+    let s = 0;
+    for (let i = a; i < a + win; i++) {
+      const v = ch2 ? (ch[i] + ch2[i]) / 65536 : ch[i] / 32768;
+      s += v * v;
+    }
+    return Math.sqrt(s / win);
+  };
+  let mx = 0;
+  const m: number[] = [];
+  const k: number[] = [];
+  for (let x = 0; x < W; x++) {
+    m.push(env(music.channels[0], music.channels[1], x));
+    k.push(env(kick, null, x));
+    mx = Math.max(mx, m[x]);
+  }
+  const kmx = Math.max(...k);
+  for (let b = 0; b <= 8; b++) {
+    const x = (b / 8) * W;
+    g.fillStyle = b % 4 ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.2)';
+    g.fillRect(x, 0, 1, H);
+  }
+  g.fillStyle = 'rgba(255,79,168,.35)';
+  for (let x = 0; x < W; x++) g.fillRect(x, H - 10 - (k[x] / kmx) * 50, 1, (k[x] / kmx) * 50);
+  g.strokeStyle = COLORS.cyan;
+  g.lineWidth = 2;
+  g.beginPath();
+  for (let x = 0; x < W; x++) g.lineTo(x, H - 10 - (m[x] / mx) * (H - 40));
+  g.stroke();
+  g.fillStyle = COLORS.ink2;
+  g.font = font(700, 11);
+  g.fillText('DROP, BARS 24–26: MUSIC BUS ENVELOPE (CYAN) DUCKING UNDER THE KICK (PINK)', 12, 18);
+  return c;
+}
+
 function table(rows: (string | number)[][], head: string[]): HTMLTableElement {
   const t = h('table', `border-collapse:collapse;margin:12px 0;font:600 12px/1.5 Manrope;color:${COLORS.ink2}`);
   const tr = h('tr');
@@ -277,8 +351,10 @@ async function analyseTrack(id: string): Promise<void> {
   const song = songById(id)!;
   status.textContent = `rendering ${meta.title} in the worker…`;
   let t0 = performance.now();
+  const watch = watchFrames();
   const pcm = await music.renderTrack(id, SR, (p) => (status.textContent = `rendering ${meta.title} in the worker… ${(p * 100).toFixed(0)}%`));
   const workerMs = performance.now() - t0;
+  const workerFrames = watch();
 
   status.textContent = 'rendering again on the main thread…';
   await nextFrame();
@@ -288,6 +364,14 @@ async function analyseTrack(id: string): Promise<void> {
   const mainMs = performance.now() - t0;
   const again = job.result();
   const identical = hashPcm(again) === hashPcm(pcm);
+
+  // the main-thread fallback (no Worker), as the game would run it: how long does the UI stall?
+  status.textContent = 'rendering with the main-thread fallback…';
+  await nextFrame();
+  const watch2 = watchFrames();
+  const fallback = await createBuiltinMusic({ worker: false }).renderTrack(id, SR);
+  const fallbackFrames = watch2();
+  const fallbackSame = hashPcm(fallback) === hashPcm(pcm);
 
   status.textContent = 'measuring kick onsets…';
   await nextFrame();
@@ -347,6 +431,9 @@ async function analyseTrack(id: string): Promise<void> {
     kickErrMs,
     mixKickErrMs: onsetErr(l, beatToFrame(meta.grid.bpm, SR, 0), SR),
     lowSideDb,
+    workerFrames,
+    fallbackFrames,
+    fallbackSame,
   };
   store.tracks[id] = res;
 
@@ -355,7 +442,9 @@ async function analyseTrack(id: string): Promise<void> {
     table(
       [
         ['render (worker / main thread)', `${workerMs.toFixed(0)} ms / ${mainMs.toFixed(0)} ms at ${SR} Hz`],
-        ['worker = main thread (bit-identical)', identical ? 'yes' : 'NO'],
+        ['worker = main thread (bit-identical)', identical && fallbackSame ? 'yes' : 'NO'],
+        ['UI frames while rendering: worker', `${workerFrames.frames} frames, longest gap ${workerFrames.maxGapMs.toFixed(0)} ms`],
+        ['UI frames while rendering: no-worker fallback', `${fallbackFrames.frames} frames, longest gap ${fallbackFrames.maxGapMs.toFixed(0)} ms`],
         ['peak', `${res.peakDb.toFixed(2)} dBFS (into limiter ${res.prePeakDb.toFixed(1)} dBFS, max gain reduction ${(-res.limiterDb).toFixed(1)} dB)`],
         ['NaN / Inf samples', res.nonFinite],
         ['DC offset L / R', `${res.dc[0].toExponential(1)} / ${res.dc[1].toExponential(1)}`],
@@ -372,6 +461,12 @@ async function analyseTrack(id: string): Promise<void> {
       ['section', 'bar', 'RMS dBFS', 'side RMS', 'low <150', 'mid', 'high >2.5k'],
     ),
   );
+  // sidechain: two bars of the first drop, the music stems alone (envelope) against the kick
+  status.textContent = 'measuring the sidechain pump…';
+  await nextFrame();
+  const mj = createTrackJob(song, SR, { solo: ['chords', 'bass', 'pluck', 'lead'] });
+  while (!mj.step());
+  app.appendChild(drawPump(meta, mj.result(), kick));
   addPlayer(pcm);
   status.textContent = `${meta.title}: done`;
   store.done = true;

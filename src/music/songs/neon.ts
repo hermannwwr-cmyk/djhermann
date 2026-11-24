@@ -84,6 +84,6 @@ export default defineSong({
   cut: { intro: [500, 2000], groove: 2800, build: [1600, 14000], breakdown: [700, 3800], outro: 650 },
   mix: baseMix(
     { chords: { trim: 0 }, lead: { trim: 0 }, pluck: { trim: 3 } },
-    { reverb: { decay: 0.75, damping: 0.38, preDelay: 0.02, returnDb: -5, duck: 0.5 }, delay: { beats: 0.75, feedback: 0.38, damp: 0.42, returnDb: -9, toReverb: 0.2 }, masterDb: -2.1 },
+    { reverb: { decay: 0.75, damping: 0.38, preDelay: 0.02, returnDb: -5, duck: 0.5 }, delay: { beats: 0.75, feedback: 0.38, damp: 0.42, returnDb: -9, toReverb: 0.2 }, masterDb: -2.2 },
   ),
 });
