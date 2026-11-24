@@ -18,14 +18,20 @@
  *    clock (drift, smoothness); the staircase then only supplies the constant distance between the
  *    render clock and the device clock, which is the browser's own output latency, unrounded.
  *
- * Either way the offset in use only ever glides (slew limited), so positions drawn from it are
- * smooth and monotonic; a real discontinuity (suspend, glitch, route change) is followed quickly.
+ * Either way the offset in use only ever glides (exponentially, with a minimum slew), so positions
+ * drawn from it are smooth and monotonic; a real discontinuity (suspend, glitch, route change) is
+ * followed quickly.
  */
 
 const STAIR_N = 192;
 const TS_N = 31;
-/** normal correction speed: 0.5 ms per second, far above real clock drift, invisible on screen */
+/** minimum correction speed: 0.5 ms per second, far above real clock drift, invisible on screen */
 const SLEW_PER_SEC = 0.0005;
+/**
+ * larger errors (a fresh lock settling) shrink exponentially with this time constant: a 4 ms
+ * error moves the clock by under 0.07 ms per frame, still invisible
+ */
+const SETTLE_TC_SEC = 1;
 /** an error above this is a real discontinuity and is chased quickly */
 const FAST_ERR_SEC = 0.004;
 const FAST_TC_SEC = 0.08;
@@ -239,7 +245,7 @@ export class ClockSync {
     if (a === 0) return cur;
     if (a > 0.2) return target;
     if (a > FAST_ERR_SEC) return cur + err * (1 - Math.exp(-dt / FAST_TC_SEC));
-    const max = SLEW_PER_SEC * dt;
+    const max = Math.max(SLEW_PER_SEC * dt, a * (1 - Math.exp(-dt / SETTLE_TC_SEC)));
     return a <= max ? target : cur + Math.sign(err) * max;
   }
 }

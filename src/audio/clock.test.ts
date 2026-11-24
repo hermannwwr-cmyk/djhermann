@@ -123,6 +123,34 @@ describe('ClockSync', () => {
     expect(Math.abs(clock.perfToCtx(t) - dev.line(t)) * 1000).toBeLessThan(1);
   });
 
+  it('works off a few ms of error within seconds, in small steps', () => {
+    const clock = new ClockSync();
+    let t = 0;
+    for (let i = 0; i < 200; i++) {
+      t += 25;
+      clock.addStaircase(t, t / 1000 + 5);
+    }
+    // the estimate moves by 3.5 ms (for instance the timestamps took over): glide there
+    for (let i = 0; i < 200; i++) {
+      t += 25;
+      clock.addStaircase(t, t / 1000 + 5.0035);
+    }
+    let worst = 0;
+    let prev = clock.getOffset();
+    let settledAt = -1;
+    for (let i = 0; i < 400; i++) {
+      t += 25;
+      clock.addStaircase(t, t / 1000 + 5.0035);
+      const o = clock.getOffset();
+      worst = Math.max(worst, Math.abs(o - prev));
+      prev = o;
+      if (settledAt < 0 && Math.abs(o - 5.0035) < 0.0002) settledAt = i * 0.025;
+    }
+    expect(worst * 1000).toBeLessThan(0.1);
+    expect(settledAt).toBeGreaterThanOrEqual(0);
+    expect(settledAt).toBeLessThan(5);
+  });
+
   it('follows a real discontinuity (suspend / resume) quickly', () => {
     const clock = new ClockSync();
     let t = 0;

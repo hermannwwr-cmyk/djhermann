@@ -79,9 +79,16 @@ export class PlateReverb {
     const { decay, damping } = this.p;
     const g = 0.6 * gain;
     let { w, bw, lpA, lpB, fbA, fbB, lfo } = this;
+    const exc = this.exc;
+    const preLen = this.preLen;
+    const lfoStep = this.lfoInc * 16;
+    let ex = exc * (0.5 + 0.5 * Math.sin(lfo));
+    let ei = ex | 0;
+    let ef = ex - ei;
+    let ei2 = (exc - ex) | 0;
     for (let i = 0; i < n; i++) {
       pre[w & kpre] = input[i];
-      let v = pre[(w - this.preLen) & kpre];
+      let v = pre[(w - preLen) & kpre];
       bw += 0.85 * (v - bw);
       v = bw;
       // input diffusion
@@ -102,12 +109,15 @@ export class PlateReverb {
       a3[w & k3] = u;
       v = d + 0.625 * u;
 
-      // slow modulation of the first tank all-passes (linear-interpolated read)
-      lfo += this.lfoInc;
-      if (lfo > 2 * Math.PI) lfo -= 2 * Math.PI;
-      const ex = this.exc * (0.5 + 0.5 * Math.sin(lfo));
-      const ei = ex | 0;
-      const ef = ex - ei;
+      // slow modulation of the first tank all-passes (linear-interpolated read), updated every 16 frames
+      if ((w & 15) === 0) {
+        lfo += lfoStep;
+        if (lfo > 2 * Math.PI) lfo -= 2 * Math.PI;
+        ex = exc * (0.5 + 0.5 * Math.sin(lfo));
+        ei = ex | 0;
+        ef = ex - ei;
+        ei2 = (exc - ex) | 0;
+      }
 
       // tank half A
       let xa = v + decay * fbB;
@@ -129,7 +139,7 @@ export class PlateReverb {
 
       // tank half B
       let xb = v + decay * fbA;
-      r0 = (w - nm2 - (this.exc - ex | 0)) & km2;
+      r0 = (w - nm2 - ei2) & km2;
       d = m2[r0];
       u = xb + 0.7 * d;
       m2[w & km2] = u;

@@ -13,7 +13,8 @@
 import type { TrackArt } from '../../core/types';
 import type { SongDef } from '../render';
 import { Arranger, arrangeStandard, levelAt, makeKit, note, notes } from '../score';
-import type { BarCtx, BusSettings, Chord, Kit, KitParams, Level, MixSettings, Sound, SongParts, StemId } from '../score';
+import type { BarCtx, BusSettings, Chord, Kit, KitParams, Level, MixSettings, Sound, SongParts, StemId, SynthEnv } from '../score';
+import type { Sample } from '../dsp';
 import { bassNote, bell, keys, lead, mallet, pluck, stringPluck, supersawLoop, vox } from '../synth';
 import type { BassParams, BellParams, KeysParams, LeadParams, PluckParams, StringParams, SupersawParams, VoxParams, Vowel, Onset } from '../synth';
 import { BAR, STEPS_PER_BAR } from '../timeline';
@@ -245,7 +246,43 @@ export function defineSong(spec: SongSpec): SongDef {
     const sixteenth = (e: { bpm: number }): number => 15 / e.bpm;
     const bassSound = (midi: number, len: number): Sound =>
       a.sound(`bass:${midi}:${len}`, (e) => bassNote(e.sr, midi, len * sixteenth(e) * 0.94, spec.bass.p));
-    const sawSound = (midi: number): Sound => a.sound(`saw:${midi}`, (e) => supersawLoop(e.sr, midi, spec.chords.saw));
+    // one supersaw loop per note and render (keyed by the render's env object, so nothing outlives it)
+    const loops = new WeakMap<object, Map<number, Sample>>();
+    const sawLoop = (e: SynthEnv, midi: number): Sample => {
+      let m = loops.get(e);
+      if (!m) loops.set(e, (m = new Map()));
+      let s = m.get(midi);
+      if (!s) m.set(midi, (s = supersawLoop(e.sr, midi, spec.chords.saw)));
+      return s;
+    };
+    /** A whole chord as one sample: the notes' loops summed under an attack / hold / release envelope. */
+    const chordSound = (ch: Chord, len: number, attack: number, release: number): Sound =>
+      a.sound(`chord:${ch.notes.join(',')}:${len}:${attack}:${release}`, (e) => {
+        const hold = Math.round(len * sixteenth(e) * e.sr);
+        const att = Math.max(1, Math.round(attack * e.sr));
+        const rel = Math.max(1, Math.round(release * e.sr));
+        const n = Math.max(hold, att) + rel;
+        const l = new Float32Array(n);
+        const r = new Float32Array(n);
+        ch.notes.forEach((midi, v) => {
+          const s = sawLoop(e, midi);
+          const size = s.l.length;
+          let idx = Math.floor(((v * 0.381966 + 0.13) % 1) * size);
+          const sr2 = s.r ?? s.l;
+          for (let i = 0; i < n; i++) {
+            l[i] += s.l[idx];
+            r[i] += sr2[idx];
+            if (++idx === size) idx = 0;
+          }
+        });
+        const gate = Math.max(hold, att);
+        for (let i = 0; i < n; i++) {
+          const env = i < att ? i / att : i < gate ? 1 : 1 - (i - gate) / rel;
+          l[i] *= env;
+          r[i] *= env;
+        }
+        return { l, r };
+      });
     const syl = spec.lead.voice.kind === 'vox' ? spec.lead.voice.syllables.map(syllable) : [];
 
     const leadSound = (n: MelNote, idx: number, prev: number | null, shift: number): Sound => {
@@ -341,9 +378,7 @@ export function defineSong(spec: SongSpec): SongDef {
         const pat = ON_DROP(level) ? chDrop : level === 'groove' ? chGroove : HOLD_BAR;
         const stab = pat.length > 1;
         for (const h of pat) {
-          for (const m of ch.notes) {
-            a2.hold('chords', sawSound(m), s + h.step, h.len, 1, stab ? 0.006 : 0.03, stab ? spec.chords.stabRelease ?? 0.06 : 0.14);
-          }
+          a2.hit('chords', chordSound(ch, h.len, stab ? 0.006 : 0.03, stab ? spec.chords.stabRelease ?? 0.06 : 0.14), s + h.step, 1, { swing: false });
         }
       },
 
