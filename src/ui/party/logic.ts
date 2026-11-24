@@ -99,6 +99,16 @@ export function initial(name: string): string {
 const SEAT_HUES = [190, 330, 265, 45, 155, 215, 300, 20];
 export const seatHue = (seat: number): number => SEAT_HUES[((seat % SEAT_HUES.length) + SEAT_HUES.length) % SEAT_HUES.length];
 
+/** A player's avatar colour, the same on every screen and every phone (it follows the player id). */
+export function pidHue(pid: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < pid.length; i++) {
+    h ^= pid.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return seatHue((h >>> 0) % SEAT_HUES.length);
+}
+
 // ───────────────────────────── board ─────────────────────────────
 
 export interface RankedEntry extends BoardEntry {

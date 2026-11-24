@@ -7,7 +7,7 @@
  * States: waiting for the host's music (loading overlay), playing, the DJ paused, the DJ's phone
  * dropped out, reconnecting, results (the final board), and the party ended.
  */
-import { House, LogOut, Pause, RefreshCw, Trophy, Unplug, Users, Volume1, WifiOff } from 'lucide-static';
+import { House, LogOut, Pause, RefreshCw, Trophy, Unplug, Users, Volume1 } from 'lucide-static';
 import { sectionAtBeat } from '../../core/beatgrid';
 import { createGameBus } from '../../core/events';
 import { IDLE_HUD, createFrameLoop } from '../../core/frame';
@@ -17,7 +17,7 @@ import type { AppContext, FrameState, GigResults, HudState, Screen } from '../..
 import { createRhythmDev } from '../../game/rhythm';
 import { createTopBar, showCard } from '../hud';
 import { createLoadingOverlay } from '../screens';
-import { add, button, h, icon, wait } from '../screens/dom';
+import { button, h, icon } from '../screens/dom';
 import { formatPercent, formatScore } from '../screens/logic';
 import { buzz, playUi } from '../screens/shared';
 import { confirmDialog, dismissTopLayer } from '../screens/ui';
@@ -211,7 +211,10 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
     renderState(next, prev);
   }
 
+  let remindPill: HTMLElement | null = null;
+
   function renderState(s: ControllerState, prev: ControllerState | null): void {
+    if (s !== 'live') remindPill?.click();
     stateSlot.replaceChildren();
     stateSlot.classList.remove('pt-ctl__state--on');
     const show = (card: HTMLElement): void => {
@@ -263,8 +266,10 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
     );
     pill.type = 'button';
     pill.dataset.act = 'remind';
+    remindPill = pill;
     playSlot.appendChild(pill);
     const gone = (): void => {
+      if (remindPill === pill) remindPill = null;
       pill.classList.remove('pt-remind--in');
       window.setTimeout(() => pill.remove(), 400);
     };
@@ -314,11 +319,12 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
     );
     const line = first
       ? n > 1
-        ? 'You topped the board!'
+        ? `You topped the board, out of ${n} players!`
         : 'Nobody beat you tonight.'
-      : ahead
-        ? `${formatScore(ahead.score - score)} points behind ${ahead.name}.`
-        : 'So close.';
+      : ahead && ahead.score > score
+        ? `Out of ${n} players · ${formatScore(ahead.score - score)} points behind ${ahead.name}`
+        : `Out of ${n} players`;
+    const judged = stats.perfect + stats.great + stats.good + stats.miss;
     const tile = (label: string, value: string, tone = ''): HTMLElement =>
       h('div', `sc-res__tile${tone ? ` sc-res__tile--${tone}` : ''}`, h('div', 'sc-res__tilelabel', label), h('div', 'sc-res__tilevalue ui-num', value));
 
@@ -330,14 +336,14 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
         'pt-res__hero',
         h('div', 'pt-res__kicker', results.completed ? 'SET COMPLETE' : 'THE CROWD LEFT'),
         medal,
-        h('div', 'pt-res__place', first ? 'FIRST PLACE' : `${ordinal(rank).toUpperCase()} PLACE`, h('span', null, ` of ${n}`)),
+        h('div', 'pt-res__place', first ? 'FIRST PLACE' : `${ordinal(rank).toUpperCase()} PLACE`),
         h('p', 'pt-res__line', line),
       ),
       h(
         'div',
         'sc-res__tiles pt-res__tiles',
         tile('SCORE', formatScore(score), 'gold'),
-        tile('ACCURACY', formatPercent(me?.accuracy ?? stats.accuracy)),
+        tile('ACCURACY', judged === 0 ? '–' : formatPercent(me?.accuracy ?? stats.accuracy)),
         tile('BEST COMBO', String(me?.maxCombo ?? stats.maxCombo)),
       ),
       h(
@@ -460,7 +466,6 @@ function startSession(ctx: AppContext, net: PartyNet, host: HTMLElement, room: R
     // the first frame decides between waiting / playing; make sure the overlay is up before it
     watch();
     if (!loadingShown && state === null) setLoading(true);
-    await wait(0);
   })();
 
   return {

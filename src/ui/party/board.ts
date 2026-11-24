@@ -9,12 +9,11 @@
  */
 import './party.css';
 import { Crown, Unplug } from 'lucide-static';
-import { hashString } from '../../core/math';
 import type { BoardEntry } from '../../core/party';
 import type { Component, FrameState } from '../../core/types';
 import { add, h, icon } from '../screens/dom';
 import { formatPercent, formatScore } from '../screens/logic';
-import { boardWindow, initial, rankBoard, shortScore } from './logic';
+import { boardWindow, initial, pidHue, rankBoard, shortScore } from './logic';
 import type { RankedEntry } from './logic';
 
 export interface BoardChipDeps {
@@ -30,12 +29,13 @@ export interface BoardChipDeps {
 
 /** rows shown at most */
 const CHIP_ROWS = 4;
+/** pills in the strip layout: three keep every name readable on a 360 px phone */
+const ROW_PILLS = 3;
 /** px per row (must match .pt-chip__row height in party.css) */
 const ROW_H = 24;
 /** how often the board is read, ms */
 const POLL_MS = 200;
 
-const hueOf = (pid: string): number => hashString(pid) % 360;
 
 interface ChipRow {
   el: HTMLElement;
@@ -73,7 +73,7 @@ export function createBoardChip(deps: BoardChipDeps): Component {
 
   function render(board: BoardEntry[]): void {
     const ranked = rankBoard(board, deps.myPid);
-    const shown = boardWindow(ranked, CHIP_ROWS);
+    const shown = boardWindow(ranked, row ? ROW_PILLS : CHIP_ROWS);
     const sig = shown.map((e) => `${e.pid}:${e.rank}:${e.score}:${e.connected ? 1 : 0}:${e.name}`).join('|');
     if (sig === shownSig) return;
     shownSig = sig;
@@ -144,7 +144,7 @@ export function renderBoardList(board: readonly BoardEntry[], myPid: string, opt
   shown.forEach((e, i) => {
     const medal = e.rank <= 3 ? ` pt-board__rank--${e.rank}` : '';
     const av = h('span', 'pt-avatar pt-avatar--sm', initial(e.name));
-    av.style.setProperty('--hue', String(hueOf(e.pid)));
+    av.style.setProperty('--hue', String(pidHue(e.pid)));
     const tags = h(
       'span',
       'pt-board__tags',
@@ -161,7 +161,7 @@ export function renderBoardList(board: readonly BoardEntry[], myPid: string, opt
         'span',
         'pt-board__who',
         h('span', 'pt-board__nameline', h('span', 'pt-board__name', e.name), tags),
-        h('span', 'pt-board__sub', `${formatPercent(e.accuracy)} accuracy · best combo ${e.maxCombo}`),
+        h('span', 'pt-board__sub', `${formatPercent(e.accuracy)} accuracy · ${e.maxCombo} combo`),
       ),
       h('span', 'pt-board__score ui-num', formatScore(e.score)),
     );

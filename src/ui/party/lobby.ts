@@ -12,7 +12,7 @@ import { add, button, clear, h, icon } from '../screens/dom';
 import { DIFFICULTY_COPY } from '../screens/logic';
 import { buzz } from '../screens/shared';
 import { confirmDialog, dismissTopLayer, toast, topBar } from '../screens/ui';
-import { NOTES_COPY, hostOf, roomErrorCopy, roomLink, seatHue, sortPlayers, waitingLine } from './logic';
+import { NOTES_COPY, hostOf, pidHue, roomErrorCopy, roomLink, sortPlayers, waitingLine } from './logic';
 import { avatar, diffPicker, nameField, partySession, stateCard, waitingBars } from './parts';
 import { createSetPicker } from './setlist';
 import type { SetPicker } from './setlist';
@@ -104,7 +104,7 @@ export function createLobbyScreen(ctx: AppContext): Screen<undefined> {
     const row = h(
       'div',
       `pt-player${isMe ? ' pt-player--me' : ''}${p.connected ? '' : ' pt-player--off'}`,
-      avatar(p.name, seatHue(p.seat)),
+      avatar(p.name, pidHue(p.pid)),
       h(
         'span',
         'pt-player__text',
@@ -189,7 +189,7 @@ export function createLobbyScreen(ctx: AppContext): Screen<undefined> {
 
   function playerSettings(r: RoomClient): HTMLElement {
     const me = r.me;
-    const name = nameField(me?.name ?? settings.get().playerName, seatHue(me?.seat ?? 1), (n) => {
+    const name = nameField(me?.name ?? settings.get().playerName, pidHue(r.pid), (n) => {
       settings.set({ playerName: n });
       room?.setMe({ name: n });
     });
