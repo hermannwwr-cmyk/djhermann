@@ -2595,6 +2595,26 @@ button.sc-row:active {
   transition: clip-path 380ms var(--ease-out);
 }
 
+/* the edge of the press, where the grooves are being cut */
+.sc-load__edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.55),
+    0 0 16px 2px rgba(139, 108, 255, 0.7),
+    inset 0 0 12px rgba(45, 226, 255, 0.45);
+  transform: scale(calc(0.36 + var(--p, 0) * 0.64));
+  transition:
+    transform 380ms var(--ease-out),
+    opacity 300ms ease;
+  pointer-events: none;
+}
+
+.sc-load--done .sc-load__edge {
+  opacity: 0;
+}
+
 .sc-load__vinyl {
   width: 100%;
   height: 100%;
@@ -2679,6 +2699,19 @@ button.sc-row:active {
   flex: none;
 }
 
+@media (max-width: 400px) {
+  .sc-picker__jump > span:not(.ui-icon) {
+    display: none;
+  }
+
+  .sc-picker__jump {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
 .sc-picker__own {
   display: flex;
   flex-direction: column;
@@ -2741,7 +2774,7 @@ button.sc-row:active {
 
 /* the pad and its ring of tap lights */
 .sc-cal__stage {
-  --size: min(232px, 62cqi, 38vh);
+  --size: min(232px, 62cqi, 31vh);
   position: relative;
   flex: none;
   display: grid;
@@ -2759,7 +2792,7 @@ button.sc-row:active {
 }
 
 .sc-cal__stage--small {
-  --size: min(150px, 40cqi, 22vh);
+  --size: min(150px, 40cqi, 20vh);
 }
 
 .sc-cal__lights {
@@ -2775,8 +2808,10 @@ button.sc-row:active {
   height: 8px;
   margin: -4px;
   border-radius: 50%;
-  background: var(--led-off);
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+  background: #2c2c3a;
+  box-shadow:
+    inset 0 1px 1px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
   transform: rotate(var(--a)) translateY(calc(var(--size) / -2 - 17px));
   transition:
     background var(--t-fast) ease,
@@ -3181,7 +3216,6 @@ button.sc-row:active {
   display: flex;
   flex-direction: column;
   gap: var(--s-4);
-  justify-content: center;
   padding: var(--s-1) var(--s-5) var(--s-6);
   scroll-snap-align: center;
   scroll-snap-stop: always;
@@ -3192,6 +3226,7 @@ button.sc-row:active {
 .sc-how__art {
   position: relative;
   flex: none;
+  margin-top: auto;
   width: 100%;
   max-height: 46vh;
   aspect-ratio: 4 / 3;
@@ -3221,6 +3256,7 @@ button.sc-row:active {
 }
 
 .sc-how__text {
+  margin-bottom: auto;
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
@@ -3369,7 +3405,13 @@ button.sc-row:active {
 
 @media (max-height: 640px) {
   .sc-how__art {
-    max-height: 40vh;
+    max-height: 34vh;
+    aspect-ratio: auto;
+    height: 34vh;
+  }
+
+  .sc-how__card {
+    gap: var(--s-3);
   }
 
   .sc-how__body {

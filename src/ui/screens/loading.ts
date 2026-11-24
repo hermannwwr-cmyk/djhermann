@@ -61,7 +61,7 @@ export function createLoadingOverlay(): LoadingOverlay {
   const press = h('div', 'sc-load__press');
   const blank = h('div', 'sc-load__blank');
   let rec: HTMLElement | null = null;
-  const disc = h('div', 'sc-load__disc', blank, press);
+  const disc = h('div', 'sc-load__disc', blank, press, h('div', 'sc-load__edge'));
   const stage = h('div', 'sc-load__stage');
   const pct = h('div', 'sc-load__pct ui-num', '0', h('small', null, '%'));
   const tip = h('p', 'sc-load__tip');

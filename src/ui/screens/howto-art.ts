@@ -43,7 +43,6 @@ const tapMarker = (cx: number, cy: number, color: string = C.ink): string =>
   `<g class="sc-ill__tap" style="transform-origin:${cx}px ${cy}px">
      <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${color}" stroke-width="2" class="sc-ill__ring"/>
      <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${color}" stroke-width="2" class="sc-ill__ring sc-ill__ring--2"/>
-     <circle cx="${cx}" cy="${cy}" r="18" fill="none" stroke="${color}" stroke-width="2.5" stroke-opacity="0.85"/>
    </g>`;
 
 // ───────────────────────────── 1: hit the pads ─────────────────────────────

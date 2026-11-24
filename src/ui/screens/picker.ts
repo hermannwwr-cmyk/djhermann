@@ -102,6 +102,7 @@ export function openTrackPicker(ctx: AppContext, host: HTMLElement, opts: TrackP
     className: 'sc-chipbtn sc-picker__jump',
     icon: Upload,
     label: 'Your own music',
+    ariaLabel: 'Load your own music',
     onTap: () => own.scrollIntoView({ block: 'start', behavior: 'smooth' }),
   });
   jump.dataset.act = 'jump-own';
