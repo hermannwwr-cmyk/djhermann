@@ -61,7 +61,7 @@ export default defineSong({
     },
     {
       name: 'piano',
-      inst: { kind: 'keys', p: { bright: 1.1, t1: 1.1, len: 1.6 } },
+      inst: { kind: 'keys', p: { bright: 1.1, t1: 1.1, len: 1.1 } },
       kind: 'block',
       pattern: 'x - - - | - - - - | . . . x | - - - -',
       dropPattern: '. . x . | . . . x | . . x . | . . . x',

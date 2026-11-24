@@ -100,8 +100,6 @@ interface StemState {
   gain: AutoPoint[] | undefined;
   /** a voice wrote into this stem in the current chunk */
   touched: boolean;
-  /** ... or in the previous one (filter tails and sends still ringing) */
-  wasTouched: boolean;
 }
 
 /** Q of the two low-pass stages (k = 1 / Q). */
@@ -110,11 +108,8 @@ const LP_K2 = 1 / 0.6;
 const HP_K = 1 / 0.71;
 const DENORM = 1e-20;
 
-/**
- * Two cascaded zero-delay-feedback SVF low-passes over buf[from, to), state in st.
- * With apply = false the state follows the signal but the buffer is left untouched (filter open).
- */
-function lowpass2(buf: Float32Array, from: number, to: number, st: Float64Array, g: number, apply: boolean): void {
+/** Two cascaded zero-delay-feedback SVF low-passes over buf[from, to), in place, state in st. */
+function lowpass2(buf: Float32Array, from: number, to: number, st: Float64Array, g: number): void {
   const a1 = 1 / (1 + g * (g + LP_K1));
   const a2 = g * a1;
   const a3 = g * a2;
@@ -137,7 +132,7 @@ function lowpass2(buf: Float32Array, from: number, to: number, st: Float64Array,
     v2 = q2 + b2 * q1 + b3 * v3;
     q1 = 2 * v1 - q1 + DENORM - DENORM;
     q2 = 2 * v2 - q2 + DENORM - DENORM;
-    if (apply) buf[i] = v2;
+    buf[i] = v2;
   }
   st[0] = p1;
   st[1] = p2;
@@ -173,6 +168,8 @@ function highpassSample(src: Sample, freq: number, sr: number): Sample {
   };
   return { l: run(src.l), r: src.r ? run(src.r) : null, loop: src.loop };
 }
+
+const isRest = (st: Float64Array): boolean => st[0] === 0 && st[1] === 0 && st[2] === 0 && st[3] === 0;
 
 const svfG = (freq: number, sr: number): number => Math.tan((Math.PI * Math.min(Math.max(freq, 10), sr * 0.45)) / sr);
 
@@ -249,7 +246,6 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
       cut: score.auto[`${id}.cut`],
       gain: score.auto[`${id}.gain`],
       touched: false,
-      wasTouched: false,
     }));
     gbuf = new Float32Array(maxChunk);
     mixL = new Float32Array(maxChunk);
@@ -407,14 +403,9 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
   const beatOfFrame = (f: number): number => ((f / sr - FIRST_BEAT_SEC) * bpm) / 60;
 
   function processStem(st: StemState, c0: number, n: number): void {
-    const wasTouched = st.wasTouched;
-    st.wasTouched = st.touched;
-    if (!st.touched && !wasTouched) {
-      // silent for two chunks: the filter tails have died away, nothing to add
-      st.lpL.fill(0);
-      st.lpR.fill(0);
-      return;
-    }
+    // Nothing was played into the stem and its filters are at rest: processing it would add exact
+    // zeros, so skipping is not an approximation (and the output does not depend on chunk sizes).
+    if (!st.touched && isRest(st.lpL) && isRest(st.lpR)) return;
     st.touched = false;
     const bus = mix.stems[st.id];
     const soloed = !opts.solo || opts.solo.includes(st.id);
@@ -423,24 +414,36 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     const depth = bus.duck;
 
     // filter sweep, in blocks of CONTROL frames
+    // control blocks sit on absolute multiples of CONTROL frames, whatever the chunking
+    const first = CONTROL - (c0 % CONTROL);
     if (cut) {
-      for (let b = 0; b < n; b += CONTROL) {
-        const e = Math.min(n, b + CONTROL);
-        const fc = autoValue(cut, beatOfFrame(c0 + b));
+      for (let b = 0; b < n; b = b === 0 ? first : b + CONTROL) {
+        const e = Math.min(n, b === 0 ? first : b + CONTROL);
+        const fc = autoValue(cut, beatOfFrame(c0 + b - ((c0 + b) % CONTROL)));
+        if (fc >= 19000) {
+          // wide open: bypass, and let the filter start from rest when it next closes
+          // (from rest, a low-pass at a few hundred Hz settles within a fraction of a millisecond)
+          if (st.lpL[0] !== 0 || st.lpL[1] !== 0) {
+            st.lpL.fill(0);
+            st.lpR.fill(0);
+          }
+          continue;
+        }
         const g = svfG(fc, sr);
-        const apply = fc < 19000;
-        lowpass2(l, b, e, st.lpL, g, apply);
-        if (r) lowpass2(r, b, e, st.lpR, g, apply);
+        lowpass2(l, b, e, st.lpL, g);
+        if (r) lowpass2(r, b, e, st.lpR, g);
       }
     }
 
     // gain: automation (interpolated across each block) × bus gain × sidechain
     if (gain) {
-      for (let b = 0; b < n; b += CONTROL) {
-        const e = Math.min(n, b + CONTROL);
-        const gA = autoValue(gain, beatOfFrame(c0 + b));
-        const gB = autoValue(gain, beatOfFrame(c0 + b + CONTROL));
-        for (let i = b; i < e; i++) gbuf[i] = (gA + ((gB - gA) * (i - b)) / CONTROL) * base * (1 - depth * duck[i]);
+      for (let b = 0; b < n; b = b === 0 ? first : b + CONTROL) {
+        const e = Math.min(n, b === 0 ? first : b + CONTROL);
+        const blockStart = c0 + b - ((c0 + b) % CONTROL);
+        const gA = autoValue(gain, beatOfFrame(blockStart));
+        const gB = autoValue(gain, beatOfFrame(blockStart + CONTROL));
+        const off = blockStart - c0;
+        for (let i = b; i < e; i++) gbuf[i] = (gA + ((gB - gA) * (i - off)) / CONTROL) * base * (1 - depth * duck[i]);
       }
     } else if (depth > 0) {
       const dk = duck;

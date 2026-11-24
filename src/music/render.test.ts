@@ -37,6 +37,15 @@ describe('track render', () => {
     expect(Buffer.from(b.channels[1].buffer).equals(Buffer.from(a.channels[1].buffer))).toBe(true);
   });
 
+  it('does not depend on the chunk size (worker and main-thread fallback chunk differently)', () => {
+    for (const other of [SONGS[0], SONGS[4]]) {
+      const x = renderTrackSync(other, SR, { chunkBars: 1 });
+      const y = renderTrackSync(other, SR, { chunkBars: 3 });
+      expect(Buffer.from(x.channels[0].buffer).equals(Buffer.from(y.channels[0].buffer)), other.id).toBe(true);
+      expect(Buffer.from(x.channels[1].buffer).equals(Buffer.from(y.channels[1].buffer)), other.id).toBe(true);
+    }
+  });
+
   it('puts the kick onsets exactly on the grid', () => {
     const k = renderTrackSync(song, SR, { solo: ['kick'] }).channels[0];
     for (const bar of [0, 16, 32, 63]) {
