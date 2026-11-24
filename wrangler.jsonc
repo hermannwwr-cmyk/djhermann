@@ -18,5 +18,8 @@
     "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
   },
   // SQLite-backed Durable Objects (the only kind the Workers free plan allows)
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  // Pull-request preview builds (`wrangler preview`) need this block. Previews do not get the
+  // Durable Object, so party rooms only work on the production deploy from main.
+  "previews": {}
 }
