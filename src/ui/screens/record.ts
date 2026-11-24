@@ -469,3 +469,22 @@ export function drawTonearm(
   g.stroke();
   return c;
 }
+
+/**
+ * A spinning record as an element: the record turns (CSS), the light on it stays put.
+ * `sizePx` is the CSS size it will be shown at; the caller sizes the element.
+ */
+export function recordElement(sizePx: number, label: RecordLabel = 'logo', className = ''): HTMLDivElement {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const el = document.createElement('div');
+  el.className = className ? `sc-minirec ${className}` : 'sc-minirec';
+  el.setAttribute('aria-hidden', 'true');
+  const spin = document.createElement('div');
+  spin.className = 'sc-minirec__spin';
+  spin.appendChild(drawRecord(sizePx * dpr, { label }));
+  const sheen = document.createElement('div');
+  sheen.className = 'sc-minirec__sheen';
+  sheen.appendChild(drawSheen(sizePx * dpr));
+  el.append(spin, sheen);
+  return el;
+}

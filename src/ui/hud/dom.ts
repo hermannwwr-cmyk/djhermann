@@ -43,3 +43,10 @@ export function play(target: Element, keyframes: Keyframe[], options: KeyframeAn
 }
 
 export { sleep };
+
+/** Vibration exists and the browser will allow it (it is blocked until the player has touched the page). */
+export function canVibrate(): boolean {
+  if (typeof navigator === 'undefined' || !('vibrate' in navigator)) return false;
+  const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+  return ua ? ua.hasBeenActive : true;
+}

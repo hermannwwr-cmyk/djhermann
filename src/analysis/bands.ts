@@ -15,6 +15,8 @@ export const ENV_RATE = 1000;
 /** Crossover frequencies of the three bands. */
 export const LOW_HZ = 180;
 export const HIGH_HZ = 2500;
+/** Upper edge of the "sub" band: bass drum and bass only, below the body of a snare drum. */
+export const SUB_HZ = 120;
 
 /** Mono mix of a track at half (or less) of its sample rate: the input of the band split. */
 export interface MonoMix {
@@ -33,6 +35,8 @@ export interface BandPower {
   low: Float32Array;
   mid: Float32Array;
   high: Float32Array;
+  /** the bottom of the low band (below SUB_HZ); only the beat-grid detector uses it */
+  sub: Float32Array;
 }
 
 /** How many source frames are averaged into one mono sample (keeps the mix at 22–32 kHz). */
@@ -91,6 +95,7 @@ export function computeBandPower(mix: MonoMix, onProgress?: ProgressFn): BandPow
   const low = new Float32Array(frames);
   const mid = new Float32Array(frames);
   const high = new Float32Array(frames);
+  const sub = new Float32Array(frames);
   const samplesPerFrame = fs / ENV_RATE;
   const SCALE = 1 / 32768;
 
@@ -171,6 +176,12 @@ export function computeBandPower(mix: MonoMix, onProgress?: ProgressFn): BandPow
   const l1b0 = l1[0], l1b1 = l1[1], l1b2 = l1[2], l1a1 = l1[3], l1a2 = l1[4];
   const l2b0 = l2[0], l2b1 = l2[1], l2b2 = l2[2], l2a1 = l2[3], l2a2 = l2[4];
   let l0z1 = 0, l0z2 = 0, l1z1 = 0, l1z2 = 0, l2z1 = 0, l2z2 = 0;
+  const [s1, s2] = butter4('lp', SUB_HZ, lowRate);
+  const s1b0 = s1[0], s1b1 = s1[1], s1b2 = s1[2], s1a1 = s1[3], s1a2 = s1[4];
+  const s2b0 = s2[0], s2b1 = s2[1], s2b2 = s2[2], s2a1 = s2[3], s2a2 = s2[4];
+  let s1z1 = 0, s1z2 = 0, s2z1 = 0, s2z2 = 0;
+  const subDelaySec = groupDelay([l0, s1, s2], 55, lowRate) - 1.5 / fs;
+  const subCounts = new Uint16Array(frames);
   // The low-pass delays a kick by a few milliseconds; shift the frames back by that much so the
   // three bands line up in time. The boxcar's centre is 1.5 mix samples after its first sample.
   const delaySec = groupDelay([l0, l1, l2], 70, lowRate) - 1.5 / fs;
@@ -183,18 +194,30 @@ export function computeBandPower(mix: MonoMix, onProgress?: ProgressFn): BandPow
     let v = l1b0 * y + l1z1;
     l1z1 = l1b1 * y - l1a1 * v + l1z2;
     l1z2 = l1b2 * y - l1a2 * v;
-    y = l2b0 * v + l2z1;
-    l2z1 = l2b1 * v - l2a1 * y + l2z2;
-    l2z2 = l2b2 * v - l2a2 * y;
-    const frame = Math.floor((j / lowRate - delaySec) * ENV_RATE);
+    let w = l2b0 * v + l2z1;
+    l2z1 = l2b1 * v - l2a1 * w + l2z2;
+    l2z2 = l2b2 * v - l2a2 * w;
+    let frame = Math.floor((j / lowRate - delaySec) * ENV_RATE);
     if (frame >= 0 && frame < frames) {
-      low[frame] += y * y;
+      low[frame] += w * w;
       counts[frame]++;
+    }
+    v = s1b0 * y + s1z1;
+    s1z1 = s1b1 * y - s1a1 * v + s1z2;
+    s1z2 = s1b2 * y - s1a2 * v;
+    w = s2b0 * v + s2z1;
+    s2z1 = s2b1 * v - s2a1 * w + s2z2;
+    s2z2 = s2b2 * v - s2a2 * w;
+    frame = Math.floor((j / lowRate - subDelaySec) * ENV_RATE);
+    if (frame >= 0 && frame < frames) {
+      sub[frame] += w * w;
+      subCounts[frame]++;
     }
   }
   for (let m = 0; m < frames; m++) {
     if (counts[m] > 0) low[m] /= counts[m];
+    if (subCounts[m] > 0) sub[m] /= subCounts[m];
   }
   onProgress?.(1);
-  return { rate: ENV_RATE, length: frames, durationSec, low, mid, high };
+  return { rate: ENV_RATE, length: frames, durationSec, low, mid, high, sub };
 }

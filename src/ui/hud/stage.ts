@@ -62,7 +62,7 @@ function beamSprite(hex: string): HTMLCanvasElement {
   for (let y = 0; y < H; y++) {
     const v = y / (H - 1);
     const half = 2.2 + (W / 2 - 2.2) * v;
-    const along = Math.pow(1 - v, 1.25);
+    const along = Math.pow(1 - v, 0.95) * Math.min(1, 0.55 + v * 6);
     for (let x = 0; x < W; x++) {
       const u = Math.abs(x + 0.5 - W / 2) / half;
       if (u >= 1) continue;
@@ -391,8 +391,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     const sg = fitCanvas(scrim, w, h, 1);
     sg.clearRect(0, 0, w, h);
     const top = sg.createLinearGradient(0, 0, 0, barTop + 34);
-    top.addColorStop(0, 'rgba(4,4,14,0.62)');
-    top.addColorStop((barTop + 6) / (barTop + 34), 'rgba(4,4,14,0.5)');
+    top.addColorStop(0, 'rgba(4,4,14,0.42)');
+    top.addColorStop((barTop + 6) / (barTop + 34), 'rgba(4,4,14,0.3)');
     top.addColorStop(1, 'rgba(4,4,14,0)');
     sg.fillStyle = top;
     sg.fillRect(0, 0, w, barTop + 34);
@@ -401,7 +401,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     sg.translate(64, barTop + 24);
     sg.scale(1, 0.34);
     const pool = sg.createRadialGradient(0, 0, 0, 0, 0, 118);
-    pool.addColorStop(0, 'rgba(4,4,14,0.6)');
+    pool.addColorStop(0, 'rgba(4,4,14,0.55)');
     pool.addColorStop(0.6, 'rgba(4,4,14,0.32)');
     pool.addColorStop(1, 'rgba(4,4,14,0)');
     sg.fillStyle = pool;
@@ -661,9 +661,9 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
           fX[i] = x + 3 + rand() * Math.max(1, fw - 6);
           fY[i] = y + 2 + rand() * 2;
           fVx[i] = (rand() - 0.5) * 12;
-          fVy[i] = -(16 + rand() * 30);
-          fMax[i] = fLife[i] = 0.28 + rand() * 0.32;
-          fSize[i] = 4.5 + rand() * 4.5;
+          fVy[i] = -(22 + rand() * 38);
+          fMax[i] = fLife[i] = 0.3 + rand() * 0.36;
+          fSize[i] = 5.5 + rand() * 5.5;
           break;
         }
       }
@@ -675,7 +675,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
         const age = 1 - Math.max(0, fLife[i]) / fMax[i];
         const size = fSize[i] * (1 - age * 0.75);
         const sp = age < 0.28 ? spr.glowHot : age < 0.62 ? spr.glowGold : spr.glowAmber;
-        blit(ctx, sp, fX[i], fY[i], size, size * 1.35, (1 - age) * 0.85);
+        blit(ctx, sp, fX[i], fY[i], size, size * 1.5, (1 - age) * 0.9);
       }
     } else if (fire > 0.02) {
       blit(ctx, spr.glowHot, x + fw / 2, y + 1, fw / 2, 7, fire * (0.3 + 0.25 * pulse));
@@ -771,7 +771,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
       ctx.globalCompositeOperation = 'lighter';
       const hz = h - 14 * s;
-      const hazeA = light * (0.2 + 0.26 * bass + 0.12 * pulse);
+      const hazeA = light * (0.3 + 0.3 * bass + 0.14 * pulse);
       for (let i = 0; i < 3; i++) {
         const px = w * (0.14 + 0.36 * i);
         const t = i / 2 + (tint - i / 2) * 0.42;
@@ -790,7 +790,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // beams
       const nb = nBeams(lowFx);
       const bl = (h + 18) * 1.18;
-      const bw = bl * (0.4 + 0.2 * burst);
+      const bw = bl * (0.52 + 0.2 * burst);
       const kLit = 1 - Math.pow(0.5, dt / 0.18);
       const ranks = BEAM_RANK[nb];
       for (let i = 0; i < nb; i++) {
@@ -805,7 +805,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
         const theta = fan * (1 - 0.5 * sick) + swing * (1 - 0.7 * sick);
         // a failing fixture flickers
         const flick = sick > 0.05 ? 1 - sick * 0.75 * (Math.sin(tFree * 37 + i * 12.9) > 0.1 ? 1 : 0.15) : 1;
-        const a = lit * flick * Math.min(1.1, light * (0.38 + 0.36 * pulse * look.bounce + 0.2 * bass) + burst * 0.5);
+        const a = lit * flick * Math.min(1.2, light * (0.56 + 0.4 * pulse * look.bounce + 0.24 * bass) + burst * 0.5);
         const cs = Math.cos(theta);
         const sn = Math.sin(theta);
         ctx.setTransform(dpr * cs, dpr * sn, -dpr * sn, dpr * cs, dpr * sx, dpr * 3);
