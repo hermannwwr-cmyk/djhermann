@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: Settings = {
   guide: true,
   seenHowTo: false,
   tutorialDone: false,
+  playerName: '',
   best: {},
 };
 

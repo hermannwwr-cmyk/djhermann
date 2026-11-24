@@ -179,6 +179,9 @@ export function createRhythmDev(deps: RhythmDeps): RhythmDev {
       core.setDifficulty(d);
       relayout();
     },
+    get density() {
+      return core.density;
+    },
     setDensity(d) {
       core.setDensity(d);
     },

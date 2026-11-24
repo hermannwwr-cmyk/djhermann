@@ -1,3 +1,5 @@
+import type { BoardEntry, PartyStore } from './party';
+
 /**
  * Shared contracts for the whole game. Every module codes against these types;
  * modules never import each other's internals (they are wired together in src/app).
@@ -403,6 +405,8 @@ export interface RhythmController {
   setDifficulty(difficulty: Difficulty): void;
   /** 0..1. Only notes with priority <= density appear. 0 = no notes (free play, busy mixing). */
   setDensity(density: number): void;
+  /** the density last set */
+  readonly density: number;
   getStats(): RhythmStats;
   /** forget all judgments, combo and points */
   reset(): void;
@@ -607,6 +611,8 @@ export interface Settings {
   seenHowTo: boolean;
   /** the guided tutorial gig was finished */
   tutorialDone: boolean;
+  /** name shown to other players in party mode ('' until the player picks one) */
+  playerName: string;
   /** best score per difficulty */
   best: Partial<Record<Difficulty, number>>;
 }
@@ -617,7 +623,20 @@ export interface SettingsStore {
   subscribe(fn: (s: Settings) => void): () => void;
 }
 
-export type ScreenId = 'title' | 'home' | 'setup' | 'library' | 'settings' | 'calibrate' | 'howto' | 'game' | 'results';
+export type ScreenId =
+  | 'title'
+  | 'home'
+  | 'setup'
+  | 'library'
+  | 'settings'
+  | 'calibrate'
+  | 'howto'
+  | 'game'
+  | 'results'
+  // party mode (step 2)
+  | 'party'
+  | 'lobby'
+  | 'controller';
 
 export interface GameParams {
   mode: GameMode;
@@ -629,6 +648,8 @@ export interface GameParams {
    * time limit, and nothing is penalised. Uses mode 'gig'.
    */
   tutorial?: boolean;
+  /** Party mode: this gig is hosted in the room in AppContext.party (the host's phone plays the audio). */
+  party?: boolean;
 }
 
 export interface ScreenParams {
@@ -640,7 +661,13 @@ export interface ScreenParams {
   calibrate: undefined;
   howto: undefined;
   game: GameParams;
-  results: { results: GigResults; params: GameParams };
+  results: { results: GigResults; params: GameParams; board?: BoardEntry[] };
+  /** party hub: host a party or join one (code optional, e.g. from a ?room= link) */
+  party: { code?: string } | undefined;
+  /** the room lobby (host and players) for AppContext.party.room */
+  lobby: undefined;
+  /** a player's game screen (notes + pads, in time with the host) for AppContext.party.room */
+  controller: undefined;
 }
 
 /** A full-screen view. The navigator mounts `el`, then calls enter(); leave() before unmounting. */
@@ -665,4 +692,5 @@ export interface AppContext {
   library: Library;
   settings: SettingsStore;
   nav: Nav;
+  party: PartyStore;
 }
