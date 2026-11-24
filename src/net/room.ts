@@ -48,6 +48,8 @@ export const ROOM_NET = {
   connectTimeoutMs: 5000,
   /** reconnect delays (±20 % jitter); the last one repeats */
   backoffMs: [100, 300, 700, 1500, 3000, 5000],
+  /** while reconnecting, ask over HTTP whether the room still exists after every this many failures */
+  checkRoomEvery: 3,
   /** the first connection fails with RoomError('network') after this many failed attempts */
   initialAttempts: 3,
 } as const;
@@ -220,11 +222,22 @@ export function openRoom(opts: OpenRoomOptions): RoomClientImpl {
       }
     } else {
       setStatus('reconnecting');
+      // several attempts failed: is the room still there? (it expires when nobody is connected)
+      if (retries > 0 && retries % ROOM_NET.checkRoomEvery === 0) void checkRoomGone();
     }
     const steps = ROOM_NET.backoffMs;
     const base = steps[Math.min(retries, steps.length - 1)];
     retries++;
     retryTimer = env.setTimeout(connect, base * (0.8 + 0.4 * env.random()));
+  }
+
+  async function checkRoomGone(): Promise<void> {
+    try {
+      const res = await env.fetch(`${env.origin}/api/rooms/${encodeURIComponent(code)}`, { method: 'GET' });
+      if (res.status === 404 && !closed && !welcomed) fail('not-found', 'The room has closed.');
+    } catch {
+      /* no network: keep trying */
+    }
   }
 
   function fail(codeIn: ErrorCode | 'network', message: string): void {

@@ -268,4 +268,19 @@ describe('PartyStore + room client', () => {
     expect(hDev.sockets.length).toBe(n);
     expect(player.hostConnected).toBe(false);
   });
+
+  it('gives up with not-found when the room is gone while reconnecting', async () => {
+    const { sched, server, net } = world();
+    const host = (await settle(sched, createPartyStore(net.device({ perfOrigin: 0 }).env).host(me))) as RoomClientImpl;
+    const pDev = net.device({ perfOrigin: 0 });
+    const player = await settle(sched, createPartyStore(pDev.env).join(host.code, me));
+    const errors: string[] = [];
+    player.on('error', ({ code }) => errors.push(code));
+    server.rooms.delete(host.code);
+    pDev.sockets[pDev.sockets.length - 1].kill();
+    pDev.wake('visible');
+    await runFor(sched, 15_000);
+    expect(player.status).toBe('closed');
+    expect(errors).toEqual(['not-found']);
+  });
 });

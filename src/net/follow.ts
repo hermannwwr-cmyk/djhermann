@@ -24,7 +24,7 @@ export const FOLLOW = {
   /** a rate change bigger than this between ticks (scratch, brake) snaps */
   snapRate: 0.25,
   /** extrapolate at most this far past the last tick (host paused / offline): then hold */
-  horizonMs: 600,
+  horizonMs: 1000,
 } as const;
 
 export interface FollowRef {
