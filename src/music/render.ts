@@ -62,6 +62,8 @@ export interface TrackJob {
   readonly limiterMinGain: number;
   /** peak of the mix going into the limiter */
   readonly prePeak: number;
+  /** NaN / Infinity samples met before the output stage (should be 0; they are written as silence) */
+  readonly nonFinite: number;
 }
 
 /** Peak ceiling of the limiter: -1 dBFS with a little room for rounding. */
@@ -228,6 +230,7 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
   const dc = new Float64Array(4);
   const dcR1 = 1 - (2 * Math.PI * 16) / sr;
   let prePeak = 0;
+  let nonFinite = 0;
   let done = false;
 
   const master = dbToGain(opts.masterDb ?? mix.masterDb);
@@ -532,6 +535,12 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
         xl *= u * u;
         xr *= u * u;
       }
+      if (!(xl - xl === 0 && xr - xr === 0)) {
+        // NaN or ±Infinity: count it and write silence rather than garbage
+        nonFinite++;
+        xl = 0;
+        xr = 0;
+      }
       const al = xl < 0 ? -xl : xl;
       const ar = xr < 0 ? -xr : xr;
       if (al > pk) pk = al;
@@ -600,6 +609,9 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     },
     get prePeak(): number {
       return prePeak;
+    },
+    get nonFinite(): number {
+      return nonFinite;
     },
   };
 }

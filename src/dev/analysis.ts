@@ -44,8 +44,8 @@ app.innerHTML = `
 <div class="an-page" style="max-width:520px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:12px;color:${COLORS.ink};font-family:Manrope,system-ui">
   <div style="font:800 18px ${FONT_DISPLAY};letter-spacing:.02em">Analysis harness</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <label class="ui-label">BPM <input id="bpm" value="124.5" style="width:64px"></label>
-    <label class="ui-label">1st beat <input id="first" value="0.731" style="width:64px"></label>
+    <label class="ui-label">BPM <input id="bpm" value="124.5" style="width:56px"></label>
+    <label class="ui-label">1st beat <input id="first" value="0.731" style="width:56px"></label>
     <button class="ui-btn ui-btn--sm" id="synth">Import synthetic WAV</button>
     <button class="ui-btn ui-btn--sm" id="garbage">Import garbage</button>
     <label class="ui-btn ui-btn--sm">Pick a file<input id="file" type="file" accept="audio/*" hidden></label>
@@ -71,7 +71,7 @@ function renderList(): void {
   for (const m of library.list()) {
     const row = document.createElement('button');
     row.className = 'ui-btn ui-btn--sm';
-    row.style.justifyContent = 'space-between';
+    row.style.cssText = 'justify-content:flex-start;text-align:left;white-space:normal;overflow-wrap:anywhere;height:auto;min-height:40px;padding:8px 14px;font-size:11px;line-height:1.35';
     row.dataset.id = m.id;
     const conf = m.gridConfidence !== undefined ? ` · conf ${m.gridConfidence.toFixed(2)}` : '';
     row.textContent = `${m.source === 'user' ? '★ ' : ''}${m.artist} - ${m.title} · ${m.grid.bpm.toFixed(2)} BPM @ ${m.grid.firstBeatSec.toFixed(3)}s${conf}`;
@@ -142,7 +142,7 @@ function redraw(): void {
     current,
     zoomStart,
     zoomSpan,
-    `${zoomStart.toFixed(2)}s +${zoomSpan}s · ${current.meta.grid.bpm.toFixed(3)} BPM · gold = bar line`,
+    `${zoomStart.toFixed(2)}s +${zoomSpan.toFixed(2)}s · ${current.meta.grid.bpm.toFixed(3)} BPM · gold = bar line`,
   );
 }
 

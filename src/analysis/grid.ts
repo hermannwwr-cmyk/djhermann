@@ -710,7 +710,7 @@ export function detectGridFromOnsets(on: OnsetStrength, bands: BandPower, hint?:
   const sharpness = off > 0 ? score / off : 1;
   const spread = phaseSpread(ev, period, profile);
   const offGrid = offGridShare(ev, period);
-  let confidence = smoothstep(1.1, 4, sharpness) * (1 - smoothstep(0.004, 0.025, spread));
+  let confidence = smoothstep(1.1, 2.6, sharpness) * (1 - smoothstep(0.004, 0.025, spread));
   // a stretch of the track whose hits miss the grid (a tempo change, a drifting drummer)
   confidence *= 1 - 0.9 * smoothstep(0.08, 0.35, offGrid);
   // a tempo picked by preference, or a downbeat that barely beat its runner-up, is a guess
