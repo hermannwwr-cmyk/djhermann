@@ -97,6 +97,30 @@ function startSession(ctx: AppContext, host: HTMLElement, params: GameParams): S
   const calloutLayer = div('gs-callouts', playSlot);
   calloutLayer.appendChild(callouts.el);
   consoleSlot.appendChild(consoleC.el);
+
+  // Between missions the pads need the room: close the drawer a moment after a mission ends,
+  // unless another mission has started or the player is still using the console.
+  let lastConsoleTouch = 0;
+  const onConsoleTouch = (): void => {
+    lastConsoleTouch = performance.now();
+  };
+  consoleC.el.addEventListener('pointerdown', onConsoleTouch, true);
+  consoleC.el.addEventListener('pointermove', onConsoleTouch, true);
+  let closeTimer = 0;
+  const scheduleClose = (): void => {
+    window.clearTimeout(closeTimer);
+    closeTimer = window.setTimeout(() => {
+      if (dead || params.mode === 'free') return;
+      if (gig.getHud().mission) return;
+      if (performance.now() - lastConsoleTouch < 1500) return scheduleClose();
+      consoleC.openPanel(null);
+    }, 1400);
+  };
+  cleanup.push(() => {
+    window.clearTimeout(closeTimer);
+    consoleC.el.removeEventListener('pointerdown', onConsoleTouch, true);
+    consoleC.el.removeEventListener('pointermove', onConsoleTouch, true);
+  });
   guideLayer.appendChild(guide.el);
 
   cleanup.push(
@@ -115,6 +139,7 @@ function startSession(ctx: AppContext, host: HTMLElement, params: GameParams): S
   // ── sound effects for game events ──
   cleanup.push(
     bus.on('mission:end', ({ result }) => {
+      scheduleClose();
       if (result.rating === 'fail') engine.playSound('fail', { gain: 0.5 });
       else engine.playSound('success', { gain: result.rating === 'perfect' ? 0.65 : 0.45 });
     }),
