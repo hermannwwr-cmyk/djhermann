@@ -41,6 +41,8 @@ export interface GridDetails {
   sharpness: number;
   /** spread of the beat phase between stretches of the track, ms */
   phaseSpreadMs: number;
+  /** share of the onset energy that sits in stretches whose hits do not land on the grid */
+  offGrid: number;
   /** score of each of the four beats as the downbeat */
   downbeatScores: number[];
 }
@@ -480,6 +482,56 @@ function phaseSpread(ev: Events, period: number, reference: Float64Array): numbe
   return Math.sqrt(variance / wsum);
 }
 
+/** Stretch length (s) for the on-grid check. */
+const ALIGN_SEGMENT_SEC = 10;
+/** Tempos searched around the grid's in each stretch: ± this much, relative. */
+const ALIGN_RANGE = 0.04;
+/** A stretch folds this much sharper on another tempo than on the grid's: from LOW it starts to count as off the grid, from HIGH fully. */
+const ALIGN_LOW = 1.25;
+const ALIGN_HIGH = 1.8;
+
+/**
+ * Share of the onset energy that sits in stretches of the track that follow another tempo than the
+ * grid's (a tempo change, a drifting drummer). Each ~10 s stretch is folded on the grid's period
+ * and on nearby periods; when a nearby period makes it fold clearly sharper, the stretch is off the
+ * grid. Stretches without a beat (a pad intro) fold no sharper anywhere, and quiet ones do not count.
+ */
+function offGridShare(ev: Events, period: number): number {
+  const d = ev.durationSec;
+  const segments = Math.max(1, Math.round(d / ALIGN_SEGMENT_SEC));
+  const bins = new Float64Array(Math.max(16, Math.round(period / 0.002)));
+  const weights = new Float64Array(segments);
+  for (const band of BAND_NAMES) {
+    const t = ev.time[band];
+    const w = ev.weight[band];
+    for (let i = 0; i < t.length; i++) weights[Math.min(segments - 1, Math.floor((t[i] / d) * segments))] += BAND_WEIGHT[band] * w[i];
+  }
+  let max = 0;
+  for (let s = 0; s < segments; s++) max = Math.max(max, weights[s]);
+  const segSec = d / segments;
+  // steps small enough that the drift over a stretch stays under a few milliseconds
+  const step = 0.004 / segSec;
+  const count = Math.ceil(ALIGN_RANGE / step);
+  let sum = 0;
+  let off = 0;
+  for (let s = 0; s < segments; s++) {
+    if (weights[s] < 0.2 * max) continue;
+    const from = s * segSec;
+    const to = from + segSec;
+    const onGrid = foldScore(ev, period, bins, from, to);
+    let best = onGrid;
+    for (let k = -count; k <= count; k++) {
+      if (Math.abs(k) < 3) continue;
+      const score = foldScore(ev, period * (1 + k * step), bins, from, to);
+      if (score > best) best = score;
+    }
+    const ratio = onGrid > 0 ? best / onGrid : 1;
+    sum += weights[s];
+    off += weights[s] * smoothstep(ALIGN_LOW, ALIGN_HIGH, ratio);
+  }
+  return sum > 0 ? off / sum : 1;
+}
+
 /**
  * Which of the four beats is the downbeat. Layers come in and drop out on bar lines, so bars cut
  * at the right beat show the biggest jumps in loudness from one bar to the next; the snare or
@@ -594,6 +646,7 @@ const NO_GRID: GridResult = {
     octaveReason: 'no onsets found',
     sharpness: 1,
     phaseSpreadMs: 0,
+    offGrid: 1,
     downbeatScores: [0, 0, 0, 0],
   },
 };
@@ -656,7 +709,10 @@ export function detectGridFromOnsets(on: OnsetStrength, bands: BandPower, hint?:
   const off = (foldScore(ev, period * 1.0137, bins) + foldScore(ev, period * 0.9871, bins)) / 2;
   const sharpness = off > 0 ? score / off : 1;
   const spread = phaseSpread(ev, period, profile);
+  const offGrid = offGridShare(ev, period);
   let confidence = smoothstep(1.1, 4, sharpness) * (1 - smoothstep(0.004, 0.025, spread));
+  // a stretch of the track whose hits miss the grid (a tempo change, a drifting drummer)
+  confidence *= 1 - 0.9 * smoothstep(0.08, 0.35, offGrid);
   // a tempo picked by preference, or a downbeat that barely beat its runner-up, is a guess
   if (octave !== 'none' && octaveReason.startsWith('no steady pulse')) confidence *= 0.85;
   const ranked = [...downbeat.scores].sort((a, b) => b - a);
@@ -672,6 +728,7 @@ export function detectGridFromOnsets(on: OnsetStrength, bands: BandPower, hint?:
       octaveReason,
       sharpness,
       phaseSpreadMs: spread * 1000,
+      offGrid,
       downbeatScores: downbeat.scores,
     },
   };

@@ -52,12 +52,13 @@ export function createDeckPanel(env: PanelEnv, deck: DeckId): Panel {
   const bpm = h('div', 'dk-screen-bpm ui-num');
   const pitch = h('span', 'dk-screen-pitch ui-num');
   const pip = h('i', 'dk-phase-pip');
+  const word = h('span', 'dk-phase-word', null, 'BEATS —');
   const phase = h(
     'div',
     'dk-phase',
     { 'data-state': 'idle' },
     h('div', 'dk-phase-bar', null, h('i', 'dk-phase-mid'), pip),
-    h('div', 'dk-phase-legend', null, h('span', '', null, 'BEHIND'), h('span', 'dk-phase-word', null, 'BEAT'), h('span', '', null, 'AHEAD')),
+    h('div', 'dk-phase-legend', null, word),
   );
   const load = h('button', 'dk-load ui-touch', { type: 'button', 'data-action': `load${deck}`, 'aria-label': `Load a track on deck ${deck}` });
   load.innerHTML = `${ICON_EJECT}<span>LOAD</span>`;
@@ -156,6 +157,7 @@ export function createDeckPanel(env: PanelEnv, deck: DeckId): Panel {
   let sPitch = '';
   let sPhase = '';
   let sPip = NaN;
+  let sWord = '';
 
   const text = (node: HTMLElement, prev: string, next: string): string => {
     if (prev !== next) node.textContent = next;
@@ -201,13 +203,24 @@ export function createDeckPanel(env: PanelEnv, deck: DeckId): Panel {
       if (running) {
         const off = phaseOffsetBeats(d, o);
         const a = Math.abs(off);
-        ps = a <= PHASE_LOCK_BEATS ? 'lock' : a <= 0.12 ? 'near' : 'off';
+        // beats can only stay lined up when both decks run at the same BPM
+        const sameBpm = Math.abs(d.bpm - o.bpm) < 0.05;
+        ps = a <= PHASE_LOCK_BEATS && sameBpm ? 'lock' : a <= 0.12 ? 'near' : 'off';
+        const w = !sameBpm
+          ? `${d.bpm > o.bpm ? 'FASTER' : 'SLOWER'} THAN ${other}`
+          : ps === 'lock'
+            ? 'BEATS LINED UP'
+            : off < 0
+              ? `BEHIND ${other}`
+              : `AHEAD OF ${other}`;
+        sWord = text(word, sWord, w);
         const x = Math.round(off * 1000) / 10;
         if (x !== sPip) {
           sPip = x;
           pip.style.transform = `translate3d(${x}%,0,0)`;
         }
       }
+      if (!running) sWord = text(word, sWord, 'BEATS —');
       if (ps !== sPhase) {
         sPhase = ps;
         phase.dataset.state = ps;

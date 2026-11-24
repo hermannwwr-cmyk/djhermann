@@ -93,9 +93,9 @@ export function computeLayout(slotW: number, slotH: number, padH: number, diffic
     noteW,
     noteH,
     noteHRef,
-    comboY: hitY * 0.33,
-    comboSize: clamp(hitY * 0.21, 20, 68),
-    wordY: hitY * 0.64,
+    comboY: hitY < 130 ? hitY * 0.27 : hitY * 0.33,
+    comboSize: clamp(hitY * 0.21, 18, 68),
+    wordY: hitY < 130 ? hitY * 0.66 : hitY * 0.64,
     wordSize: clamp(hitY * 0.085, 13, Math.min(30, w * 0.07)),
     compact: hitY < 130,
   };

@@ -59,7 +59,7 @@ export function noteShapePath(ctx: CanvasRenderingContext2D, lane: number, x: nu
 
 /** Draw a lane's glyph centred on (cx, cy) for a note of height h. */
 function glyph(ctx: CanvasRenderingContext2D, lane: number, cx: number, cy: number, h: number, color: string): void {
-  const g = h * 0.3;
+  const g = h * 0.34;
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
   ctx.lineCap = 'round';
@@ -76,7 +76,7 @@ function glyph(ctx: CanvasRenderingContext2D, lane: number, cx: number, cy: numb
       break;
     }
     case 1: {
-      const bw = Math.max(1.6, h * 0.13);
+      const bw = Math.max(2, h * 0.16);
       const bh = g * 2;
       ctx.beginPath();
       ctx.rect(cx - g * 0.55 - bw / 2, cy - bh / 2, bw, bh);

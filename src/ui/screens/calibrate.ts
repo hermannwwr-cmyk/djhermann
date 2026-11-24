@@ -138,7 +138,7 @@ export function createCalibrateScreen(ctx: AppContext): Screen<undefined> {
 
   function setPrimary(label: string, svg: string, disabled = false): void {
     primaryLabel.textContent = label;
-    primaryIcon.replaceChildren(icon(svg, 'sc-fillicon'));
+    primaryIcon.replaceChildren(icon(svg, svg === Play || svg === Square ? 'sc-fillicon' : ''));
     primary.disabled = disabled;
   }
 
@@ -170,8 +170,7 @@ export function createCalibrateScreen(ctx: AppContext): Screen<undefined> {
       );
       setPrimary('STOP', Square);
     } else {
-      padIcon.hidden = !checking;
-      padIcon.replaceChildren(icon(checking ? Square : Play, 'sc-fillicon'));
+      padIcon.hidden = true;
       padLabel.textContent = checking ? 'LISTEN' : 'DONE';
       padSub.textContent = checking ? 'and watch' : '';
       const v = value();

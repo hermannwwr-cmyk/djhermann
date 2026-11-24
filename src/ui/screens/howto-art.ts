@@ -43,7 +43,7 @@ const tapMarker = (cx: number, cy: number, color: string = C.ink): string =>
   `<g class="sc-ill__tap" style="transform-origin:${cx}px ${cy}px">
      <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${color}" stroke-width="2" class="sc-ill__ring"/>
      <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${color}" stroke-width="2" class="sc-ill__ring sc-ill__ring--2"/>
-     <circle cx="${cx}" cy="${cy}" r="7" fill="${color}" fill-opacity="0.9"/>
+     <circle cx="${cx}" cy="${cy}" r="18" fill="none" stroke="${color}" stroke-width="2.5" stroke-opacity="0.85"/>
    </g>`;
 
 // ───────────────────────────── 1: hit the pads ─────────────────────────────
@@ -216,14 +216,14 @@ export function mixArt(): string {
   let ticksA = '';
   let ticksB = '';
   for (let k = 0; k < 5; k++) {
-    ticksA += `<rect x="${12 + k * 16}" y="${k === 0 ? 62 : 66}" width="3" height="${k === 0 ? 20 : 14}" rx="1.5" fill="${C.cyan}"/>`;
-    ticksB += `<rect x="${12 + k * 16}" y="${k === 0 ? 92 : 96}" width="3" height="${k === 0 ? 20 : 14}" rx="1.5" fill="${C.pink}"/>`;
+    ticksA += `<rect x="${26 + k * 14}" y="${k === 0 ? 62 : 66}" width="3" height="${k === 0 ? 20 : 14}" rx="1.5" fill="${C.cyan}"/>`;
+    ticksB += `<rect x="${26 + k * 14}" y="${k === 0 ? 92 : 96}" width="3" height="${k === 0 ? 20 : 14}" rx="1.5" fill="${C.pink}"/>`;
   }
   const two = `
-    <text x="86" y="78" text-anchor="end" class="sc-ill__deckmini" fill="${C.cyan}">A</text>
+    <text x="10" y="78" class="sc-ill__deckmini" fill="${C.cyan}">A</text>
     <g>${ticksA}</g>
     <g class="sc-ill__align">${ticksB}</g>
-    <text x="86" y="108" text-anchor="end" class="sc-ill__deckmini" fill="${C.pink}">B</text>
+    <text x="10" y="108" class="sc-ill__deckmini" fill="${C.pink}">B</text>
     <rect x="22" y="132" width="52" height="24" rx="6" fill="url(#mix-rubber)" stroke="${C.cyan}" stroke-width="1.5" class="sc-ill__syncbtn"/>
     <text x="48" y="148" text-anchor="middle" class="sc-ill__btntext" fill="${C.cyan}">SYNC</text>
     <text x="48" y="174" text-anchor="middle" class="sc-ill__small">beats line up</text>`;
@@ -265,7 +265,8 @@ export function crowdArt(): string {
   const person = (q: (typeof people)[number]): string => {
     const arms = q.up
       ? `<path d="M-12 -28L-22 -62M12 -28L22 -62" stroke="#0a0914" stroke-width="7" stroke-linecap="round"/>
-         <path d="M-12 -28L-22 -62M12 -28L22 -62" stroke="url(#crowd-rim)" stroke-width="7" stroke-linecap="round" stroke-opacity="0.35"/>`
+         <path d="M-12 -28L-22 -62M12 -28L22 -62" stroke="url(#crowd-rim)" stroke-width="7" stroke-linecap="round" stroke-opacity="0.35"/>
+         <circle cx="-22" cy="-64" r="5.5" fill="#0a0914" stroke="url(#crowd-rim)" stroke-opacity="0.8"/><circle cx="22" cy="-64" r="5.5" fill="#0a0914" stroke="url(#crowd-rim)" stroke-opacity="0.8"/>`
       : '';
     return `<g transform="translate(${q.x} ${q.y}) scale(${q.s})"><g class="sc-ill__dance" style="animation-delay:-${q.d}s">
       ${arms}
@@ -332,10 +333,10 @@ export function ownMusicArt(): string {
     </g>
     <!-- the lock: it stays here -->
     <g transform="translate(78 176)">
-      <rect x="-30" y="-14" width="60" height="28" rx="14" fill="${C.mint}" fill-opacity="0.12" stroke="${C.mint}" stroke-opacity="0.6"/>
-      <rect x="-19" y="-3" width="11" height="9" rx="2" fill="${C.mint}"/>
-      <path d="M-17 -3v-3a3.5 3.5 0 0 1 7 0v3" stroke="${C.mint}" stroke-width="1.8" fill="none"/>
-      <text x="6" y="4.5" text-anchor="middle" class="sc-ill__lock">LOCAL</text>
+      <rect x="-34" y="-14" width="68" height="28" rx="14" fill="${C.mint}" fill-opacity="0.12" stroke="${C.mint}" stroke-opacity="0.6"/>
+      <rect x="-23" y="-3" width="11" height="9" rx="2" fill="${C.mint}"/>
+      <path d="M-21 -3v-3a3.5 3.5 0 0 1 7 0v3" stroke="${C.mint}" stroke-width="1.8" fill="none"/>
+      <text x="-3" y="4.5" class="sc-ill__lock">LOCAL</text>
     </g>
     <!-- arrow to the deck -->
     <path d="M140 110h20m-7 -6l7 6l-7 6" stroke="${C.ink}" stroke-opacity="0.6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>

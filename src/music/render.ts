@@ -91,11 +91,88 @@ interface StemState {
   id: StemId;
   l: Float32Array;
   r: Float32Array | null;
-  lp: Svf[];
-  hp: Svf[];
+  /** two cascaded low-pass SVFs per channel: [ic1, ic2, ic1, ic2] */
+  lpL: Float64Array;
+  lpR: Float64Array;
   cut: AutoPoint[] | undefined;
   gain: AutoPoint[] | undefined;
+  /** a voice wrote into this stem in the current chunk */
+  touched: boolean;
+  /** ... or in the previous one (filter tails and sends still ringing) */
+  wasTouched: boolean;
 }
+
+/** Q of the two low-pass stages (k = 1 / Q). */
+const LP_K1 = 1 / 0.9;
+const LP_K2 = 1 / 0.6;
+const HP_K = 1 / 0.71;
+const DENORM = 1e-20;
+
+/**
+ * Two cascaded zero-delay-feedback SVF low-passes over buf[from, to), state in st.
+ * With apply = false the state follows the signal but the buffer is left untouched (filter open).
+ */
+function lowpass2(buf: Float32Array, from: number, to: number, st: Float64Array, g: number, apply: boolean): void {
+  const a1 = 1 / (1 + g * (g + LP_K1));
+  const a2 = g * a1;
+  const a3 = g * a2;
+  const b1 = 1 / (1 + g * (g + LP_K2));
+  const b2 = g * b1;
+  const b3 = g * b2;
+  let p1 = st[0];
+  let p2 = st[1];
+  let q1 = st[2];
+  let q2 = st[3];
+  for (let i = from; i < to; i++) {
+    let v3 = buf[i] - p2;
+    let v1 = a1 * p1 + a2 * v3;
+    let v2 = p2 + a2 * p1 + a3 * v3;
+    // (+ DENORM - DENORM flushes values far below audibility to zero: subnormals are very slow)
+    p1 = 2 * v1 - p1 + DENORM - DENORM;
+    p2 = 2 * v2 - p2 + DENORM - DENORM;
+    v3 = v2 - q2;
+    v1 = b1 * q1 + b2 * v3;
+    v2 = q2 + b2 * q1 + b3 * v3;
+    q1 = 2 * v1 - q1 + DENORM - DENORM;
+    q2 = 2 * v2 - q2 + DENORM - DENORM;
+    if (apply) buf[i] = v2;
+  }
+  st[0] = p1;
+  st[1] = p2;
+  st[2] = q1;
+  st[3] = q2;
+}
+
+/**
+ * A high-passed copy of a sample (one SVF per channel). A loop is filtered circularly: one pass to
+ * settle the filter, a second to write, so the copy still loops without a click.
+ */
+function highpassSample(src: Sample, freq: number, sr: number): Sample {
+  const g = svfG(freq, sr);
+  const a1 = 1 / (1 + g * (g + HP_K));
+  const a2 = g * a1;
+  const a3 = g * a2;
+  const run = (x: Float32Array): Float32Array => {
+    const out = new Float32Array(x.length);
+    let p1 = 0;
+    let p2 = 0;
+    for (let pass = src.loop ? 0 : 1; pass < 2; pass++) {
+      for (let i = 0; i < x.length; i++) {
+        const v = x[i];
+        const v3 = v - p2;
+        const v1 = a1 * p1 + a2 * v3;
+        const v2 = p2 + a2 * p1 + a3 * v3;
+        p1 = 2 * v1 - p1 + DENORM - DENORM;
+        p2 = 2 * v2 - p2 + DENORM - DENORM;
+        out[i] = v - HP_K * v1 - v2;
+      }
+    }
+    return out;
+  };
+  return { l: run(src.l), r: src.r ? run(src.r) : null, loop: src.loop };
+}
+
+const svfG = (freq: number, sr: number): number => Math.tan((Math.PI * Math.min(Math.max(freq, 10), sr * 0.45)) / sr);
 
 export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOptions = {}): TrackJob {
   const sr = sampleRate;
@@ -141,6 +218,8 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
   let revIn = mixL;
   let dlyIn = mixL;
   let duck = mixL;
+  /** per-frame gain of the stem being processed */
+  let gbuf = mixL;
   let reverb: PlateReverb | null = null;
   let delay: PingPong | null = null;
   const revHp = new Svf();
@@ -164,12 +243,14 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
       id,
       l: new Float32Array(maxChunk),
       r: mono(id) ? null : new Float32Array(maxChunk),
-      lp: [new Svf(), new Svf(), new Svf(), new Svf()],
-      hp: [new Svf(), new Svf()],
+      lpL: new Float64Array(4),
+      lpR: new Float64Array(4),
       cut: score.auto[`${id}.cut`],
       gain: score.auto[`${id}.gain`],
+      touched: false,
+      wasTouched: false,
     }));
-    for (const st of stems) for (const f of st.hp) f.set(Math.max(10, mix.stems[st.id].hp), 0.71, sr);
+    gbuf = new Float32Array(maxChunk);
     mixL = new Float32Array(maxChunk);
     mixR = new Float32Array(maxChunk);
     wetL = new Float32Array(maxChunk);
@@ -181,8 +262,19 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     delay = new PingPong({ frames: Math.round(mix.delay.beats * spb * sr), feedback: mix.delay.feedback, damp: mix.delay.damp });
 
     const fadeLen = Math.round(GATE_FADE * sr);
+    // the stems' high-passes are baked into each note once, instead of running on every frame
+    const baked = new Map<string, Sample>();
+    const sampleFor = (sound: Sound, stem: StemId): Sample => {
+      const raw = bank.get(sound)!;
+      const hp = mix.stems[stem].hp;
+      if (hp <= 0) return raw;
+      const key = `${sound.key}|${hp}`;
+      let s = baked.get(key);
+      if (!s) baked.set(key, (s = highpassSample(raw, hp, sr)));
+      return s;
+    };
     voices = score.events.map((e) => {
-      const sample = bank.get(e.sound)!;
+      const sample = sampleFor(e.sound, e.stem);
       const stem = STEMS.indexOf(e.stem);
       const ang = ((e.pan + 1) * Math.PI) / 4;
       const start = beatToFrame(bpm, sr, e.beat);
@@ -207,6 +299,7 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
   /** Add one voice into its stem for the window [c0, c0 + n). */
   function mixVoice(v: Voice, c0: number, n: number): void {
     const st = stems[v.stem];
+    st.touched = true;
     const from = Math.max(c0, v.start);
     const to = Math.min(c0 + n, v.start + v.len);
     const sl = v.sample.l;
@@ -215,15 +308,45 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     const dr = st.r;
     const { gl, gr } = v;
     if (v.sample.loop) {
+      // in runs that share one envelope segment and do not wrap the loop
       const size = sl.length;
       let idx = (v.offset + (from - v.start)) % size;
-      for (let f = from; f < to; f++) {
+      let f = from;
+      while (f < to) {
         const pos = f - v.start;
-        const e = pos < v.att ? pos / v.att : pos < v.gate ? 1 : 1 - (pos - v.gate) / v.rel;
-        const o = f - c0;
-        dl[o] += sl[idx] * gl * e;
-        if (dr) dr[o] += sR[idx] * gr * e;
-        if (++idx === size) idx = 0;
+        let end = Math.min(to, f + size - idx);
+        let e0: number;
+        let de: number;
+        if (pos < v.att) {
+          end = Math.min(end, v.start + v.att);
+          e0 = pos / v.att;
+          de = 1 / v.att;
+        } else if (pos < v.gate) {
+          end = Math.min(end, v.start + v.gate);
+          e0 = 1;
+          de = 0;
+        } else {
+          e0 = 1 - (pos - v.gate) / v.rel;
+          de = -1 / v.rel;
+        }
+        const cnt = end - f;
+        const o = f - c0 - idx;
+        const al = gl * e0;
+        const ar = gr * e0;
+        const dal = gl * de;
+        const dar = gr * de;
+        if (dr) {
+          for (let k = 0; k < cnt; k++) {
+            const j = idx + k;
+            dl[o + j] += sl[j] * (al + dal * k);
+            dr[o + j] += sR[j] * (ar + dar * k);
+          }
+        } else {
+          for (let k = 0; k < cnt; k++) dl[o + idx + k] += sl[idx + k] * (al + dal * k);
+        }
+        f = end;
+        idx += cnt;
+        if (idx >= size) idx -= size;
       }
       return;
     }
@@ -279,60 +402,61 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
   const beatOfFrame = (f: number): number => ((f / sr - FIRST_BEAT_SEC) * bpm) / 60;
 
   function processStem(st: StemState, c0: number, n: number): void {
+    const wasTouched = st.wasTouched;
+    st.wasTouched = st.touched;
+    if (!st.touched && !wasTouched) {
+      // silent for two chunks: the filter tails have died away, nothing to add
+      st.lpL.fill(0);
+      st.lpR.fill(0);
+      return;
+    }
+    st.touched = false;
     const bus = mix.stems[st.id];
     const soloed = !opts.solo || opts.solo.includes(st.id);
     const base = soloed ? dbToGain(bus.gainDb) : 0;
     const { l, r, cut, gain } = st;
-    const useHp = bus.hp > 0;
     const depth = bus.duck;
+
+    // filter sweep, in blocks of CONTROL frames
+    if (cut) {
+      for (let b = 0; b < n; b += CONTROL) {
+        const e = Math.min(n, b + CONTROL);
+        const fc = autoValue(cut, beatOfFrame(c0 + b));
+        const g = svfG(fc, sr);
+        const apply = fc < 19000;
+        lowpass2(l, b, e, st.lpL, g, apply);
+        if (r) lowpass2(r, b, e, st.lpR, g, apply);
+      }
+    }
+
+    // gain: automation (interpolated across each block) × bus gain × sidechain
+    if (gain) {
+      for (let b = 0; b < n; b += CONTROL) {
+        const e = Math.min(n, b + CONTROL);
+        const gA = autoValue(gain, beatOfFrame(c0 + b));
+        const gB = autoValue(gain, beatOfFrame(c0 + b + CONTROL));
+        for (let i = b; i < e; i++) gbuf[i] = (gA + ((gB - gA) * (i - b)) / CONTROL) * base * (1 - depth * duck[i]);
+      }
+    } else if (depth > 0) {
+      for (let i = 0; i < n; i++) gbuf[i] = base * (1 - depth * duck[i]);
+    } else gbuf.fill(base, 0, n);
+
     const sendR = bus.reverb;
     const sendD = bus.delay;
-    const [lpA, lpB, lpC, lpD] = st.lp;
-    const [hpA, hpB] = st.hp;
-    let gA = 1;
-    let gB = 1;
-    let open = !cut;
-    for (let i = 0; i < n; i++) {
-      const f = c0 + i;
-      const ph = f & (CONTROL - 1);
-      if (ph === 0 || i === 0) {
-        const blockBeat = beatOfFrame(f - ph);
-        if (cut) {
-          const fc = autoValue(cut, blockBeat);
-          open = fc >= 19000;
-          lpA.set(fc, 0.9, sr);
-          lpB.set(fc, 0.6, sr);
-          lpC.set(fc, 0.9, sr);
-          lpD.set(fc, 0.6, sr);
-        }
-        if (gain) {
-          gA = autoValue(gain, blockBeat);
-          gB = autoValue(gain, beatOfFrame(f - ph + CONTROL));
-        }
-      }
-      const g = (gA + ((gB - gA) * ph) / CONTROL) * base * (1 - depth * duck[i]);
-      let x = l[i];
-      // the low-pass always runs so its state follows the signal; fully open it is bypassed
-      if (cut) {
-        const y = lpB.lp(lpA.lp(x));
-        if (!open) x = y;
-      }
-      if (useHp) x = hpA.hp(x);
-      x *= g;
-      if (r) {
-        let y = r[i];
-        if (cut) {
-          const z = lpD.lp(lpC.lp(y));
-          if (!open) y = z;
-        }
-        if (useHp) y = hpB.hp(y);
-        y *= g;
+    if (r) {
+      for (let i = 0; i < n; i++) {
+        const g = gbuf[i];
+        const x = l[i] * g;
+        const y = r[i] * g;
         mixL[i] += x;
         mixR[i] += y;
         const m = (x + y) * 0.5;
         revIn[i] += m * sendR;
         dlyIn[i] += m * sendD;
-      } else {
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        const x = l[i] * gbuf[i];
         mixL[i] += x;
         mixR[i] += x;
         revIn[i] += x * sendR;

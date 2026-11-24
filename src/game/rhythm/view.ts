@@ -145,6 +145,7 @@ export class HighwayView {
   private readonly ft0 = new Float64Array(MAX_FLASHES);
   private readonly fsize = new Float32Array(MAX_FLASHES);
   private readonly fcol = new Uint8Array(MAX_FLASHES);
+  private readonly fstr = new Float32Array(MAX_FLASHES);
   private fNext = 0;
 
   constructor(core: RhythmCore, settings: SettingsStore) {
@@ -162,6 +163,11 @@ export class HighwayView {
 
   get layout(): Layout | null {
     return this.L;
+  }
+
+  /** 1 while a deck is live, dims towards 0.3 in dead air */
+  get aliveLevel(): number {
+    return this.alive;
   }
 
   /** The slot changed size (or the difficulty changed the scroll speed). Cheap: no reallocation. */
@@ -445,10 +451,10 @@ export class HighwayView {
     const y = L.hitY;
     const col = J_COLOR[fx.judgment];
     const big = fx.judgment === 'perfect' ? 1 : fx.judgment === 'great' ? 0.78 : 0.55;
-    this.flash(x, y, L.laneW * (1.1 + 0.9 * big), col, now);
-    this.flash(x, y, L.laneW * 0.7, C_WHITE, now);
-    this.ring(x, y, L.laneW * (0.55 + 0.45 * big), col, 380, now);
-    if (fx.judgment === 'perfect') this.ring(x, y, L.laneW * 0.85, fx.lane, 520, now);
+    this.flash(x, y, L.laneW * (0.8 + 0.6 * big), col, 0.8, now);
+    this.flash(x, y, L.laneW * 0.32, C_WHITE, 0.55 + 0.3 * big, now);
+    this.ring(x, y, L.laneW * (0.38 + 0.2 * big), col, 340, now);
+    if (fx.judgment === 'perfect') this.ring(x, y, L.laneW * 0.62, fx.lane, 480, now);
     if (!lowFx) {
       const n = fx.judgment === 'perfect' ? 18 : fx.judgment === 'great' ? 11 : 6;
       for (let i = 0; i < n; i++) {
@@ -468,8 +474,9 @@ export class HighwayView {
     this.ft0.fill(-1e9);
   }
 
-  private flash(x: number, y: number, size: number, col: number, now: number): void {
+  private flash(x: number, y: number, size: number, col: number, strength: number, now: number): void {
     const i = this.fNext;
+    this.fstr[i] = strength;
     this.fNext = (i + 1) % MAX_FLASHES;
     this.fx[i] = x;
     this.fy[i] = y;
@@ -716,7 +723,7 @@ export class HighwayView {
       const t = (now - this.ft0[i]) / 260;
       if (t < 0 || t >= 1) continue;
       const k = 1 - t;
-      drawGlow(ctx, this.fx[i], this.fy[i], this.fsize[i] * (0.7 + 0.5 * easeOutCubic(t)), PALETTE[this.fcol[i]], k * k);
+      drawGlow(ctx, this.fx[i], this.fy[i], this.fsize[i] * (0.7 + 0.5 * easeOutCubic(t)), PALETTE[this.fcol[i]], k * k * this.fstr[i]);
     }
     // rings: flattened ellipses lying on the road
     ctx.lineCap = 'round';
@@ -823,6 +830,10 @@ export class HighwayView {
     ctx.fillText(this.comboStr, 0, 0);
     ctx.restore();
 
+    if (L.compact) {
+      ctx.globalAlpha = 1;
+      return;
+    }
     ctx.font = this.labelFont;
     if (this.hasSpacing) c.letterSpacing = '2px';
     ctx.globalAlpha = (m === 1 ? 0.45 : 0.75) * alive;
@@ -857,7 +868,7 @@ export class HighwayView {
     ctx.globalAlpha = a;
     ctx.fillStyle = j === 'perfect' && t < 90 ? COLORS.goldHot : color;
     ctx.fillText(JUDGMENT_LABELS[j], 0, 0);
-    if (this.wordSub) {
+    if (this.wordSub && !L.compact) {
       const c = ctx as CtxWithSpacing;
       ctx.font = this.subFont;
       if (this.hasSpacing) c.letterSpacing = '2px';

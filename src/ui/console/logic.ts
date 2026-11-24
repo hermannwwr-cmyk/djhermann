@@ -16,8 +16,12 @@ export const TAU = Math.PI * 2;
 export const toRaw = (v: number, zone: number): number => (v === 0 ? 0 : v + Math.sign(v) * zone);
 
 /** Value for a raw travel position. */
-export const fromRaw = (raw: number, zone: number): number =>
-  Math.abs(raw) <= zone ? 0 : raw - Math.sign(raw) * zone;
+export function fromRaw(raw: number, zone: number): number {
+  if (Math.abs(raw) <= zone) return 0;
+  const v = raw - Math.sign(raw) * zone;
+  // snap the ends exactly (a full-down EQ must read 0, not 5e-17)
+  return Math.abs(v) >= 1 - 1e-9 ? Math.sign(v) : v;
+}
 
 export const clampRaw = (raw: number, zone: number): number => clamp(raw, -1 - zone, 1 + zone);
 

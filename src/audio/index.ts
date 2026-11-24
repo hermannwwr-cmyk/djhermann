@@ -33,12 +33,12 @@ import { ReportHistory } from './history';
 import type { HistorySample } from './history';
 import { BAND_SCALE, analyseBlock, ballistic, bandToUnit, blockPeak } from './meters';
 import type { BlockLevels } from './meters';
-import { buildMixer } from './mixer';
+import { buildMixer, loadWorklets } from './mixer';
 import type { Mixer } from './mixer';
 import { detectPlatform, echoDelaySec, estimateLatencySec, limiterLookaheadFrames } from './params';
 import { createUnmute } from './unmute';
 
-export { buildMixer } from './mixer';
+export { buildMixer, loadWorklets } from './mixer';
 export type { Mixer, MixerOptions } from './mixer';
 
 const DECKS: readonly DeckId[] = ['A', 'B'];
@@ -203,10 +203,7 @@ export function createAudioEngine(): AudioEngine {
   const base = import.meta.env.BASE_URL;
   const ready: Promise<void> = (async () => {
     if (!ctx.audioWorklet) throw new Error('AudioWorklet is not available in this browser');
-    await Promise.all([
-      ctx.audioWorklet.addModule(`${base}worklets/deck-processor.js`),
-      ctx.audioWorklet.addModule(`${base}worklets/limiter-processor.js`),
-    ]);
+    await loadWorklets(ctx, base);
     if (destroyed) return;
     buildGraph();
   })();

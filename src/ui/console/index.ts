@@ -63,7 +63,7 @@ export function createConsole(deps: ConsoleDeps): ConsoleComponent {
 
   const stage = h('div', 'dk-drawer-stage', null, ...PANEL_IDS.map((id) => panels[id].el));
   const drawer = h('div', 'dk-drawer', null, stage);
-  const el = h('div', 'dk-console', { 'data-panel-open': 'none' }, drawer, front.el);
+  const el = h('div', 'dk-console', { 'data-console': '', 'data-panel-open': 'none' }, drawer, front.el);
 
   let current: PanelId | null = null;
   /** panels drawn this frame: the open one, plus the one leaving while the drawer animates */
@@ -102,7 +102,8 @@ export function createConsole(deps: ConsoleDeps): ConsoleComponent {
     get panel() {
       return current;
     },
-    openPanel(id) {
+    openPanel(next) {
+      const id = next && PANEL_IDS.includes(next) ? next : null;
       if (id === current) return;
       const prev = current;
       current = id;

@@ -3,12 +3,14 @@
  * be rendered through an OfflineAudioContext and measured.
  *
  *   deck in ─► 3-band isolator EQ ─► filter (dry | low-pass | high-pass) ─► fader ─► crossfader ─┬─► bus
- *                                                                                               └─► echo send ─► delay loop ─► bus
+ *                                                                                               └─► echo (worklet) ─► bus
  *   one-shot sounds ───────────────────────────────────────────────────────────────────────────────► bus
  *   bus ─► master volume ─► look-ahead limiter ─► out
  *
  * EQ: Linkwitz-Riley crossovers at 250 Hz and 2.5 kHz. The three bands add back up to an all-pass
  * (flat magnitude) when their gains are equal, and a band at gain 0 is gone at 24 dB/octave.
+ *
+ * The echo and the limiter are AudioWorklets: call loadWorklets(ctx) before buildMixer(ctx).
  */
 import { clamp, clamp01 } from '../core/math';
 import { crossfaderGain, faderGain } from '../core/mixmath';
@@ -32,6 +34,14 @@ import {
   masterVolumeGain,
 } from './params';
 
+/** Every worklet module the engine uses, relative to the app's base URL. */
+export const WORKLET_MODULES = ['worklets/deck-processor.js', 'worklets/echo-processor.js', 'worklets/limiter-processor.js'] as const;
+
+/** Load the worklet modules into a context (realtime or offline). */
+export async function loadWorklets(ctx: BaseAudioContext, base: string = import.meta.env.BASE_URL): Promise<void> {
+  await Promise.all(WORKLET_MODULES.map((m) => ctx.audioWorklet.addModule(`${base}${m}`)));
+}
+
 export interface MixerOptions {
   /**
    * Insert the look-ahead limiter (needs the 'master-limiter' worklet module to be loaded).
@@ -52,8 +62,7 @@ interface Channel {
   hpGain: GainNode;
   fader: GainNode;
   xfade: GainNode;
-  echoSend: GainNode;
-  echoDelay: DelayNode;
+  echo: AudioWorkletNode;
 }
 
 export interface Mixer {
@@ -80,6 +89,10 @@ export interface Mixer {
   setEchoTime(deck: DeckId, seconds: number): void;
   setMasterVolume(value: number): void;
   dispose(): void;
+}
+
+function echoParam(node: AudioWorkletNode, name: 'send' | 'delay' | 'feedback' | 'level' | 'damp'): AudioParam {
+  return (node.parameters as unknown as Map<string, AudioParam>).get(name)!;
 }
 
 export function buildMixer(ctx: BaseAudioContext, opts: MixerOptions = {}): Mixer {
@@ -185,20 +198,26 @@ export function buildMixer(ctx: BaseAudioContext, opts: MixerOptions = {}): Mixe
     const xfade = gain(crossfaderGain(id, crossfader));
     filterOut.connect(fader).connect(xfade).connect(bus);
 
-    // ── echo: post-fader send into a damped feedback delay that returns straight to the bus ──
-    const echoSend = gain(0);
-    const echoIn = gain(1);
-    const echoDamp = biquad('lowpass', ECHO_DAMP_HZ, BUTTERWORTH_Q_DB);
-    const echoDelay = ctx.createDelay(ECHO_MAX_SEC);
-    echoDelay.delayTime.value = ECHO_DEFAULT_SEC;
-    nodes.push(echoDelay);
-    const echoFb = gain(ECHO_FEEDBACK);
-    const echoReturn = gain(ECHO_LEVEL);
-    xfade.connect(echoSend).connect(echoIn).connect(echoDamp).connect(echoDelay);
-    echoDelay.connect(echoFb).connect(echoIn);
-    echoDelay.connect(echoReturn).connect(bus);
+    // ── echo: post-fader send into a damped feedback delay that returns straight to the bus, so
+    //    the tail rings on after the send, the fader or the deck stops ──
+    const echo = new AudioWorkletNode(ctx, 'echo-processor', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      channelCount: 2,
+      channelCountMode: 'explicit',
+      channelInterpretation: 'speakers',
+      processorOptions: { maxDelay: ECHO_MAX_SEC },
+    });
+    nodes.push(echo);
+    echoParam(echo, 'delay').value = ECHO_DEFAULT_SEC;
+    echoParam(echo, 'feedback').value = ECHO_FEEDBACK;
+    echoParam(echo, 'level').value = ECHO_LEVEL;
+    echoParam(echo, 'damp').value = ECHO_DAMP_HZ;
+    echoParam(echo, 'send').value = 0;
+    xfade.connect(echo).connect(bus);
 
-    return { input, eq, dry, lp, lpGain, hp, hpGain, fader, xfade, echoSend, echoDelay };
+    return { input, eq, dry, lp, lpGain, hp, hpGain, fader, xfade, echo };
   }
 
   const ch: Record<DeckId, Channel> = { A: channel('A'), B: channel('B') };
@@ -241,13 +260,11 @@ export function buildMixer(ctx: BaseAudioContext, opts: MixerOptions = {}): Mixe
       set(ch.B.xfade.gain, crossfaderGain('B', crossfader));
     },
     setEcho(deck, on) {
-      set(ch[deck].echoSend.gain, on ? 1 : 0, 0.01);
+      set(echoParam(ch[deck].echo, 'send'), on ? 1 : 0, 0.004);
     },
     setEchoTime(deck, seconds) {
-      const t = clamp(seconds, 0.02, ECHO_MAX_SEC - 0.02);
-      const p = ch[deck].echoDelay.delayTime;
-      if (Math.abs(p.value - t) < 1e-5) return;
-      set(p, t, 0.05);
+      // the worklet glides to a new delay time by itself
+      echoParam(ch[deck].echo, 'delay').value = clamp(seconds, 0.02, ECHO_MAX_SEC - 0.02);
     },
     setMasterVolume(value) {
       set(master.gain, masterVolumeGain(value), 0.015);

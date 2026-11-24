@@ -91,7 +91,9 @@ export function renderTile(wave: WaveformData, index: number, laneH: number, dpr
 function makeLabel(deck: DeckId, color: string, text: string, laneH: number, dpr: number): HTMLCanvasElement {
   const c = document.createElement('canvas');
   const hCss = Math.min(18, laneH - 6);
-  const w = 74;
+  const g0 = c.getContext('2d')!;
+  g0.font = font(800, Math.round(hCss * 0.62));
+  const w = Math.ceil(hCss + 6 + g0.measureText(text || 'NO TRACK').width + 2);
   c.width = Math.round(w * dpr);
   c.height = Math.round(hCss * dpr);
   const g = c.getContext('2d')!;

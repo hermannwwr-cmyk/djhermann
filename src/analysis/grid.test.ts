@@ -97,6 +97,8 @@ describe('detectGrid: other drum patterns', () => {
   test('drum & bass breakbeat at 174 is not halved', () =>
     check('breakbeat 174', { bpm: 174, firstBeatSec: 0.3, bars: 64, pattern: 'breakbeat' }, 0.5), T);
   test('kick-snare backbeat at 150', () => check('backbeat 150', { bpm: 150, firstBeatSec: 0.3, bars: 64, pattern: 'backbeat' }, 0.5), T);
+  test('four-on-the-floor at 80 stays at 80 (not doubled to 160)', () =>
+    check('house 80', { bpm: 80, firstBeatSec: 0.3, bars: 48 }), T);
   test('kick-snare backbeat at 96', () => check('backbeat 96', { bpm: 96, firstBeatSec: 0.3, bars: 64, pattern: 'backbeat' }, 0.5), T);
 });
 
