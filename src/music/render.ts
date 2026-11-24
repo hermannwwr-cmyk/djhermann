@@ -13,7 +13,7 @@
 import type { PcmData } from '../core/types';
 import { Svf, dbToGain } from './dsp';
 import type { Sample } from './dsp';
-import { Limiter, PingPong, PlateReverb } from './fx';
+import { HalfRateReverb, Limiter, PingPong } from './fx';
 import { Arranger, STEMS, autoValue } from './score';
 import type { AutoPoint, MixSettings, Score, Sound, StemId } from './score';
 import { FIRST_BEAT_SEC, TOTAL_BARS, TOTAL_BEATS, beatToFrame, trackFrames } from './timeline';
@@ -220,14 +220,12 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
   let duck = mixL;
   /** per-frame gain of the stem being processed */
   let gbuf = mixL;
-  let reverb: PlateReverb | null = null;
+  let reverb: HalfRateReverb | null = null;
   let delay: PingPong | null = null;
   const revHp = new Svf();
   revHp.set(240, 0.7, sr);
-  let dcL = 0;
-  let dcR = 0;
-  let dcPrevL = 0;
-  let dcPrevR = 0;
+  /** DC blocker state: yL, yR, previous xL, previous xR */
+  const dc = new Float64Array(4);
   const dcR1 = 1 - (2 * Math.PI * 16) / sr;
   let prePeak = 0;
   let done = false;
@@ -258,7 +256,7 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     revIn = new Float32Array(maxChunk);
     dlyIn = new Float32Array(maxChunk);
     duck = new Float32Array(maxChunk);
-    reverb = new PlateReverb(sr, mix.reverb);
+    reverb = new HalfRateReverb(sr, mix.reverb, maxChunk);
     delay = new PingPong({ frames: Math.round(mix.delay.beats * spb * sr), feedback: mix.delay.feedback, damp: mix.delay.damp });
 
     const fadeLen = Math.round(GATE_FADE * sr);
@@ -399,6 +397,10 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     }
   }
 
+  const mixLRef = (): Float32Array => mixL;
+  const mixRRef = (): Float32Array => mixR;
+  const revInRef = (): Float32Array => revIn;
+  const dlyInRef = (): Float32Array => dlyIn;
   const beatOfFrame = (f: number): number => ((f / sr - FIRST_BEAT_SEC) * bpm) / 60;
 
   function processStem(st: StemState, c0: number, n: number): void {
@@ -438,14 +440,20 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
         for (let i = b; i < e; i++) gbuf[i] = (gA + ((gB - gA) * (i - b)) / CONTROL) * base * (1 - depth * duck[i]);
       }
     } else if (depth > 0) {
-      for (let i = 0; i < n; i++) gbuf[i] = base * (1 - depth * duck[i]);
+      const dk = duck;
+      for (let i = 0; i < n; i++) gbuf[i] = base * (1 - depth * dk[i]);
     } else gbuf.fill(base, 0, n);
+    const gbuf2 = gbuf;
 
     const sendR = bus.reverb;
     const sendD = bus.delay;
+    const mixL = mixLRef();
+    const mixR = mixRRef();
+    const revIn = revInRef();
+    const dlyIn = dlyInRef();
     if (r) {
       for (let i = 0; i < n; i++) {
-        const g = gbuf[i];
+        const g = gbuf2[i];
         const x = l[i] * g;
         const y = r[i] * g;
         mixL[i] += x;
@@ -456,7 +464,7 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
       }
     } else {
       for (let i = 0; i < n; i++) {
-        const x = l[i] * gbuf[i];
+        const x = l[i] * gbuf2[i];
         mixL[i] += x;
         mixR[i] += x;
         revIn[i] += x * sendR;
@@ -479,6 +487,8 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     revIn.fill(0, 0, n);
     dlyIn.fill(0, 0, n);
 
+    const T = ((globalThis as any).__T ??= {}); let tq = performance.now(); const lap = (k: string) => { const t = performance.now(); T[k] = (T[k] ?? 0) + t - tq; tq = t; };
+    lap('fills');
     while (nextVoice < voices.length && voices[nextVoice].start < c0 + n) active.push(voices[nextVoice++]);
     const still: Voice[] = [];
     for (const v of active) {
@@ -487,18 +497,34 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
     }
     active = still;
 
+    lap('voices');
     fillDuck(c0, n);
-    for (const st of stems) processStem(st, c0, n);
+    lap('duck');
+    for (const st of stems) { processStem(st, c0, n); lap('stem:' + st.id); }
 
     delay!.process(dlyIn, mixL, mixR, revIn, n, dbToGain(mix.delay.returnDb), mix.delay.toReverb);
-    for (let i = 0; i < n; i++) revIn[i] = revHp.hp(revIn[i]);
+    lap('delay');
+    const rin = revIn;
+    for (let i = 0; i < n; i++) rin[i] = revHp.hp(rin[i]);
     reverb!.process(revIn, wetL, wetR, n, dbToGain(mix.reverb.returnDb));
+    lap('reverb');
     const rd = mix.reverb.duck;
 
+    // hot loop: everything in locals (captured mutable variables would be boxed on every write)
+    const mL = mixL;
+    const mR = mixR;
+    const wL = wetL;
+    const wR = wetR;
+    const dk = duck;
+    let dcL = dc[0];
+    let dcR = dc[1];
+    let dcPrevL = dc[2];
+    let dcPrevR = dc[3];
+    let pk = prePeak;
     for (let i = 0; i < n; i++) {
-      const wd = 1 - rd * duck[i];
-      let xl = mixL[i] + wetL[i] * wd;
-      let xr = mixR[i] + wetR[i] * wd;
+      const wd = 1 - rd * dk[i];
+      let xl = mL[i] + wL[i] * wd;
+      let xr = mR[i] + wR[i] * wd;
       // DC blocker (16 Hz)
       dcL = xl - dcPrevL + dcR1 * dcL;
       dcPrevL = xl;
@@ -514,26 +540,35 @@ export function createTrackJob(song: SongDef, sampleRate: number, opts: RenderOp
       }
       const al = xl < 0 ? -xl : xl;
       const ar = xr < 0 ? -xr : xr;
-      if (al > prePeak) prePeak = al;
-      if (ar > prePeak) prePeak = ar;
+      if (al > pk) pk = al;
+      if (ar > pk) pk = ar;
       // soft clip above -2.5 dBFS: rounds off kick transients so the limiter barely moves
       if (al > 0.75) xl = (xl < 0 ? -1 : 1) * (0.75 + 0.25 * Math.tanh((al - 0.75) * 4));
       if (ar > 0.75) xr = (xr < 0 ? -1 : 1) * (0.75 + 0.25 * Math.tanh((ar - 0.75) * 4));
-      mixL[i] = xl;
-      mixR[i] = xr;
+      mL[i] = xl;
+      mR[i] = xr;
     }
+    prePeak = pk;
+    dc[0] = Math.abs(dcL) < 1e-25 ? 0 : dcL;
+    dc[1] = Math.abs(dcR) < 1e-25 ? 0 : dcR;
+    dc[2] = dcPrevL;
+    dc[3] = dcPrevR;
+    lap('master');
     limiter.process(mixL, mixR, n);
+    lap('limiter');
     // the limiter delays by `look` frames: write that much earlier, so the PCM has no latency
-    for (let i = 0; i < n; i++) {
+    const i0 = Math.max(0, look - c0);
+    const i1 = Math.min(n, total + look - c0);
+    const oL = outL;
+    const oR = outR;
+    for (let i = i0; i < i1; i++) {
       const o = c0 + i - look;
-      if (o < 0 || o >= total) continue;
-      const a = Math.round(mixL[i] * 32767);
-      const b = Math.round(mixR[i] * 32767);
-      outL[o] = a > 32767 ? 32767 : a < -32768 ? -32768 : a;
-      outR[o] = b > 32767 ? 32767 : b < -32768 ? -32768 : b;
+      const a = Math.round(mL[i] * 32767);
+      const b = Math.round(mR[i] * 32767);
+      oL[o] = a > 32767 ? 32767 : a < -32768 ? -32768 : a;
+      oR[o] = b > 32767 ? 32767 : b < -32768 ? -32768 : b;
     }
-    if (Math.abs(dcL) < 1e-25) dcL = 0;
-    if (Math.abs(dcR) < 1e-25) dcR = 0;
+    lap('out');
   }
 
   return {

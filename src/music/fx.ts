@@ -164,6 +164,74 @@ export class PlateReverb {
   }
 }
 
+/**
+ * The plate at half the sample rate: pairs of input frames are averaged, the reverb runs on the
+ * result and its output is interpolated back up. Half the cost; the tail is damped well below the
+ * half-rate Nyquist anyway. Adds about 1.5 frames of delay to the wet signal only.
+ */
+export class HalfRateReverb {
+  private readonly rev: PlateReverb;
+  private readonly dec: Float32Array;
+  private readonly hl: Float32Array;
+  private readonly hr: Float32Array;
+  /** 1 while half of an input pair is pending */
+  private ph = 0;
+  private acc = 0;
+  private lastL = 0;
+  private lastR = 0;
+
+  constructor(sampleRate: number, p: PlateParams, maxFrames: number) {
+    this.rev = new PlateReverb(sampleRate / 2, p);
+    const m = (maxFrames >> 1) + 2;
+    this.dec = new Float32Array(m);
+    this.hl = new Float32Array(m);
+    this.hr = new Float32Array(m);
+  }
+
+  /** Same contract as PlateReverb.process: ADDS the wet signal × gain into outL / outR. */
+  process(input: Float32Array, outL: Float32Array, outR: Float32Array, n: number, gain: number): void {
+    const { dec, hl, hr } = this;
+    let ph = this.ph;
+    let acc = this.acc;
+    let m = 0;
+    for (let i = 0; i < n; i++) {
+      acc += input[i];
+      if (ph === 1) {
+        dec[m++] = acc * 0.5;
+        acc = 0;
+        ph = 0;
+      } else ph = 1;
+    }
+    hl.fill(0, 0, m);
+    hr.fill(0, 0, m);
+    this.rev.process(dec, hl, hr, m, gain);
+    // upsample: the first frame of a pair holds the last value, the second is halfway to the new one
+    ph = this.ph;
+    let k = 0;
+    let lastL = this.lastL;
+    let lastR = this.lastR;
+    for (let i = 0; i < n; i++) {
+      if (ph === 1) {
+        const yl = hl[k];
+        const yr = hr[k++];
+        outL[i] += (lastL + yl) * 0.5;
+        outR[i] += (lastR + yr) * 0.5;
+        lastL = yl;
+        lastR = yr;
+        ph = 0;
+      } else {
+        outL[i] += lastL;
+        outR[i] += lastR;
+        ph = 1;
+      }
+    }
+    this.ph = ph;
+    this.acc = acc;
+    this.lastL = lastL;
+    this.lastR = lastR;
+  }
+}
+
 export interface DelayParams {
   /** delay time in frames (one echo; left and right alternate) */
   frames: number;

@@ -8,7 +8,7 @@
 
 .dk-console {
   --dk-t-drawer: 220ms;
-  --dk-drawer-h: clamp(208px, calc(100vh - 384px - var(--safe-top) - var(--safe-bottom)), 288px);
+  --dk-drawer-h: clamp(208px, calc(100vh - 386px - var(--safe-top) - var(--safe-bottom)), 288px);
   --dk-plate: linear-gradient(180deg, #1c1c26 0%, #15151d 38%, #111118 100%);
   --dk-brush: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 3px);
   position: relative;
@@ -26,7 +26,7 @@
 
 @supports (height: 100dvh) {
   .dk-console {
-    --dk-drawer-h: clamp(208px, calc(100dvh - 384px - var(--safe-top) - var(--safe-bottom)), 288px);
+    --dk-drawer-h: clamp(208px, calc(100dvh - 386px - var(--safe-top) - var(--safe-bottom)), 288px);
   }
 }
 
