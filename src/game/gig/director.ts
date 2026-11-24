@@ -89,6 +89,10 @@ interface Transition {
   cut: boolean;
   /** the rescue crossfade is running */
   fading: boolean;
+  /** beatmatched, waiting for the new track's intro to play before the crossfade is asked for */
+  waiting: boolean;
+  /** while waiting: old-deck beat at which the crossfade will be asked for */
+  fadeAtBeat: number;
 }
 
 interface PendingLoad {
@@ -499,6 +503,8 @@ export function createDirector(deps: GigDeps): GigController {
       trainwrecked: false,
       cut: false,
       fading: false,
+      waiting: false,
+      fadeAtBeat: 0,
     };
     transition = tr;
     tr.tracker.update();
@@ -536,7 +542,14 @@ export function createDirector(deps: GigDeps): GigController {
         deadlineBeat = Math.max(nextBar, Math.min(target + T.startWindowBeats, endBeat - fadeReserve - 16));
         maxClock = Math.min(deadlineBeat - now + 4, T.announceBeats + T.startWindowBeats + 8);
       }
-      const o = yield* runMission(createStartDeck(env, { deck: to, ref: from, deadlineBeat, maxClockBeats: maxClock }));
+      let atBeat: number | null = null;
+      if (timed) {
+        const now = out().beat;
+        atBeat = Math.max(plan?.mixInBeat ?? 0, Math.ceil((now + 1) / BEATS_PER_BAR) * BEATS_PER_BAR);
+      }
+      const o = yield* runMission(
+        createStartDeck(env, { deck: to, ref: from, atBeat, deadlineBeat, maxClockBeats: maxClock }),
+      );
       if (o.rating === 'fail') {
         selfPlay(to);
         rescueCallout(TEXT.startDeck.rescue(to));
@@ -563,6 +576,26 @@ export function createDirector(deps: GigDeps): GigController {
         else tr.cut = true;
       }
       yield* waitBeats(T.gapBeats);
+    }
+
+    // let the new track's intro play under the old one before the crossfade (a real blend)
+    if (timed && !tr.cut) {
+      const latest = endBeat - fadeReserve - T.fade.deadlineBeats;
+      const fadeAt = T.fadeAtBars * BEATS_PER_BAR;
+      const c0 = sight.clock;
+      tr.waiting = true;
+      while (
+        runs(out()) &&
+        runs(inc()) &&
+        inc().beat < fadeAt &&
+        out().beat < latest &&
+        tr.tracker.travel <= T.fade.lo &&
+        sight.clock - c0 < T.fadeWaitMaxBeats
+      ) {
+        tr.fadeAtBeat = Math.min(latest, out().beat + (fadeAt - inc().beat));
+        yield;
+      }
+      tr.waiting = false;
     }
 
     // 3. crossfade to the new deck
@@ -593,7 +626,7 @@ export function createDirector(deps: GigDeps): GigController {
       const o = yield* runMission(
         createStopDeck(env, { deck: from, deadlineBeats: timed ? T.stop.deadlineBeats : null }),
       );
-      if (o.rating === 'fail') {
+      if (o.rating === 'fail' && engine.getDeck(from).playing) {
         selfPause(from);
         rescueCallout(TEXT.stopDeck.rescue(from));
       }
@@ -879,9 +912,12 @@ export function createDirector(deps: GigDeps): GigController {
   function wantDensity(): number {
     if (phase !== 'playing') return 0;
     if (tutorial) return lessonDensity;
-    if (script || active || transition || !plan) return 0;
+    // notes come back while the new track's intro plays under the old one
+    const mixWait = !!transition && transition.waiting && !active;
+    if ((script && !mixWait) || active || (transition && !mixWait) || !plan) return 0;
     const m = sight.decks[main];
     if (!m.track || !runs(m)) return density;
+    if (mixWait && transition!.fadeAtBeat - m.beat <= TUNING.density.quietBeats) return 0;
     // clear the lanes just before something is asked
     const q = TUNING.density.quietBeats;
     const starts: number[] = [];
@@ -1011,6 +1047,10 @@ export function createDirector(deps: GigDeps): GigController {
     if (phase === 'ready' || tutorial) return TEXT.status.title(title);
     if (transition) {
       if (transition.fading) return TEXT.status.fading(transition.to);
+      if (transition.waiting && !active) {
+        const n = Math.ceil((transition.fadeAtBeat - m.beat) / BEATS_PER_BAR);
+        if (n >= 1) return TEXT.status.fadeIn(n);
+      }
       if (!sight.decks[transition.to].track) return TEXT.status.loadingNext;
       return TEXT.status.mixing(sight.decks[transition.to].track?.title ?? '');
     }

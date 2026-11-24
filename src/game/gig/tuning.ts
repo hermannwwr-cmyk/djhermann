@@ -13,7 +13,7 @@ export const TUNING = {
     /** change per judged note that was hit */
     judge: { perfect: 0.012, great: 0.008, good: 0.003 },
     /** change per missed note */
-    miss: { chill: -0.012, club: -0.022, festival: -0.03 } as Record<Difficulty, number>,
+    miss: { chill: -0.004, club: -0.006, festival: -0.008 } as Record<Difficulty, number>,
     /** misses cost nothing while a mission is on screen and for this many beats afterwards */
     missGraceBeats: 4,
     /** change when a mission ends */
@@ -72,8 +72,8 @@ export const TUNING = {
     cutOverlapBars: 4,
     /** shortest overlap ever used (very short tracks) */
     minOverlapBars: 4,
-    /** START DECK appears this many beats before the mix-in bar line (the first count shown is "2") */
-    announceBeats: 7,
+    /** START DECK appears this many beats before the mix-in bar line: "get ready", then 4-3-2-1-NOW */
+    announceBeats: 8,
     /** START DECK is rescued this many beats after the mix-in bar line (a bar line itself) */
     startWindowBeats: 8,
     /** PLAY press, distance from the old deck's bar line */
@@ -117,6 +117,12 @@ export const TUNING = {
       minFader: 0.6,
     },
     stop: { deadlineBeats: 8 },
+    /**
+     * After the beatmatch the crossfade waits until the new track has played this many bars (its
+     * intro), so both tracks really run together; never longer than `fadeWaitMaxBeats`.
+     */
+    fadeAtBars: 8,
+    fadeWaitMaxBeats: 40,
     /** pause between two missions of a transition, so the result can be read */
     gapBeats: 1,
     /** the player mixed into the next deck unasked: take it over after this long */
@@ -176,6 +182,8 @@ export const TUNING = {
       /** first stroke to last within this for PERFECT / GREAT */
       perfectBeats: 6,
       greatBeats: 10,
+      /** after the last stroke, wait this long for the record to be let go */
+      letGoBeats: 4,
     },
     echoOut: {
       /** the mission covers the last bars of the last track */

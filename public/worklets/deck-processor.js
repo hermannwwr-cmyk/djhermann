@@ -124,6 +124,7 @@ class DeckProcessor extends AudioWorkletProcessor {
     this.nudgeSm = 0;
     this.mainGain = 1;
     this.scratch = false;
+    this.releasing = false; // hand lifted from a stopped record: let the follower come to rest
     this.vel = 0; // source frames per output sample (scratch follower)
     this.tgt = 0;
     this.tgtEnd = 0;
@@ -198,6 +199,16 @@ class DeckProcessor extends AudioWorkletProcessor {
     this.report(frame, wasAudible ? 1 : 2);
   }
 
+  /** Leave scratch mode: the record keeps the speed the hand gave it, then the motor takes over. */
+  endScratch() {
+    const b = this.buf;
+    this.scratch = false;
+    this.releasing = false;
+    this.rate = b ? this.vel / b.ratio : 0;
+    this.vel = 0;
+    this.horizon = 0;
+  }
+
   baseTarget() {
     return this.tempo * (1 + this.nudge * NUDGE_AMOUNT);
   }
@@ -217,8 +228,9 @@ class DeckProcessor extends AudioWorkletProcessor {
     const target = this.baseTarget();
     const d = target - this.rate;
     if (d <= 0) return;
-    const adv = d * elapsed + d * d * T_SPIN_UP * 0.5; // track seconds: time lost so far + lost in the ramp
-    let pos = this.pos + adv * b.sr;
+    // source frames: the distance lost so far, plus what the (per-sample, discrete) ramp will lose
+    const adv = (d * elapsed + d * d * T_SPIN_UP * 0.5) * b.sr - d * b.ratio * 0.5;
+    let pos = this.pos + (adv > 0 ? adv : 0);
     if (this.rate === 0 && target * b.ratio === 1) pos = Math.round(pos);
     if (pos > b.len - 1) pos = b.len - 1;
     this.jump(frame, pos);
@@ -244,6 +256,7 @@ class DeckProcessor extends AudioWorkletProcessor {
         this.vel = 0;
         this.running = false;
         this.scratch = false;
+        this.releasing = false;
         this.startAt = -1;
         this.mainGain = 1;
         this.tempo = this.tempoSm = typeof m.tempo === 'number' ? m.tempo : 1;
@@ -263,12 +276,14 @@ class DeckProcessor extends AudioWorkletProcessor {
         this.vel = 0;
         this.running = false;
         this.scratch = false;
+        this.releasing = false;
         this.startAt = -1;
         this.mainGain = 1;
         this.report(frame, 2);
         break;
       }
       case 'play': {
+        if (this.releasing) this.endScratch();
         if (typeof m.anchor === 'number' && m.anchor > frame && m.anchor - frame < 0.25 * sampleRate) {
           this.startAt = m.anchor; // the press maps to a frame that has not been rendered yet: wait for it
         } else {
@@ -322,7 +337,8 @@ class DeckProcessor extends AudioWorkletProcessor {
         this.nudge = m.v;
         break;
       case 'scratchStart':
-        if (b && !this.scratch) {
+        if (this.releasing) this.releasing = false;
+        else if (b && !this.scratch) {
           this.scratch = true;
           this.vel = this.rate * b.ratio;
           // put the grab point just far enough ahead that the follower stops without swinging back
@@ -344,11 +360,11 @@ class DeckProcessor extends AudioWorkletProcessor {
         }
         break;
       case 'scratchEnd':
-        if (this.scratch) {
-          this.scratch = false;
-          this.rate = b ? this.vel / b.ratio : 0;
-          this.vel = 0;
-          this.horizon = 0;
+        // motor on: spin back up from the hand's speed. Motor off: the record stays where the hand
+        // leaves it (the follower finishes the hand's last movement and settles).
+        if (this.scratch && !this.releasing) {
+          if (this.running || !b) this.endScratch();
+          else this.releasing = true;
         }
         break;
       case 'ping':
@@ -516,6 +532,11 @@ class DeckProcessor extends AudioWorkletProcessor {
           this.tgtVel = tgtVel;
           this.horizon = horizon;
           rate = vel / ratio;
+        }
+        if (this.releasing && horizon <= 0 && vel === 0 && pos === tgt) {
+          this.pos = pos;
+          this.endScratch();
+          rate = 0;
         }
       } else {
         // ── motor ──

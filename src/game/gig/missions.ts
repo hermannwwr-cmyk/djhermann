@@ -5,7 +5,7 @@
  * engine; rescuing a failed mission is the director's job.
  */
 import { beatAtSec, distToGrid, phaseOffsetMs } from '../../core/beatgrid';
-import { clamp01, fract } from '../../core/math';
+import { clamp01 } from '../../core/math';
 import { BEATS_PER_BAR } from '../../core/types';
 import type { DeckId, MissionKind, MissionTarget } from '../../core/types';
 import { missionPoints, rateBassDrop, rateBeatmatch, rateCrossfade, rateEchoOut, rateFilterSweep, rateScratch, rateStartDeck } from './ratings';
@@ -74,6 +74,8 @@ export interface StartDeckOptions {
   deck: DeckId;
   /** the deck that is playing: its bar lines are the "1" to hit */
   ref: DeckId;
+  /** reference-deck beat of the bar line to aim for (counted in); null = any bar line */
+  atBeat: number | null;
   /** beat of the reference deck after which the mission fails; null = no time limit */
   deadlineBeat: number | null;
   /** the same limit on the gig clock, for when the reference deck is not running; null = none */
@@ -120,10 +122,21 @@ export function createStartDeck(env: MissionEnv, o: StartDeckOptions): MissionRu
       }
       const counting = !!ref.track && runs(ref) && ref.rate > 0.5;
       if (counting) {
-        // 1-2-3-4 with the reference deck's bar, shown a touch early so it can be read in time
-        const idx = Math.floor(mod(ref.beat + TUNING.transition.countLeadBeats, BEATS_PER_BAR));
-        rt.hint = idx === 0 ? TEXT.startDeck.now(o.deck) : TEXT.startDeck.count(o.deck, idx + 1);
-        rt.progress = fract(ref.beat / BEATS_PER_BAR);
+        // count down 4-3-2-1-NOW to the reference deck's bar line, a touch early so it can be read in time
+        const b = ref.beat + TUNING.transition.countLeadBeats;
+        const inBar = mod(b, BEATS_PER_BAR);
+        const nextBar = b - inBar + BEATS_PER_BAR;
+        if (o.atBeat !== null && b < o.atBeat - BEATS_PER_BAR) {
+          rt.hint = TEXT.startDeck.ready(o.deck);
+          rt.progress = 0;
+        } else if (inBar < 1 && (o.atBeat === null || b >= o.atBeat)) {
+          rt.hint = TEXT.startDeck.now(o.deck);
+          rt.progress = 1;
+        } else {
+          const k = Math.max(1, Math.ceil(nextBar - b));
+          rt.hint = TEXT.startDeck.count(o.deck, k);
+          rt.progress = clamp01(1 - (nextBar - b) / BEATS_PER_BAR);
+        }
       } else {
         rt.hint = TEXT.startDeck.plain(o.deck);
         rt.progress = null;
@@ -417,7 +430,7 @@ export function createStopDeck(env: MissionEnv, o: { deck: DeckId; deadlineBeats
     step() {
       if (!s.decks[o.deck].playing) {
         return ranOut
-          ? { rating: 'ok', label: TEXT.stopDeck.ranOut }
+          ? { rating: 'fail', label: TEXT.stopDeck.ranOut }
           : { rating: 'perfect', label: TEXT.stopDeck.done };
       }
       if (o.deadlineBeats !== null) {
@@ -611,6 +624,8 @@ export function createScratch(
   const counter = createStrokeCounter();
   let lastPos = s.decks[o.deck].positionSec;
   let firstAt: number | null = null;
+  let done: Rated | null = null;
+  let doneAt = 0;
 
   const rt: MissionRuntime = {
     kind: 'scratch',
@@ -623,13 +638,27 @@ export function createScratch(
     timeLeft: 1,
     step() {
       const d = s.decks[o.deck];
+      if (done) {
+        // strokes done: the record has to be let go so the music plays on
+        if (!d.scratching || s.clock - doneAt >= TUNING.tricks.scratch.letGoBeats) return done;
+        return null;
+      }
       if (d.scratching) {
         const before = counter.count;
         counter.move(d.positionSec - lastPos);
         if (before === 0 && counter.count > 0) firstAt = s.clock;
       } else counter.release();
       lastPos = d.positionSec;
-      if (counter.count >= o.strokes) return rateScratch(s.clock - (firstAt ?? s.clock));
+      if (counter.count >= o.strokes) {
+        done = rateScratch(s.clock - (firstAt ?? s.clock));
+        if (!d.scratching) return done;
+        doneAt = s.clock;
+        rt.hint = TEXT.scratch.letGo(o.deck);
+        rt.targets = one(`${o.deck}.platter`, 'tap');
+        rt.progress = 1;
+        rt.timeLeft = 1;
+        return null;
+      }
       rt.progress = clamp01(counter.count / o.strokes);
       if (o.windowBeats !== null) {
         const left = 1 - (s.clock - startClock) / o.windowBeats;

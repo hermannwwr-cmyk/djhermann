@@ -98,7 +98,7 @@ export interface CoreOptions {
 }
 
 /** first index with beat >= value */
-function lowerBound(beats: Float32Array, count: number, value: number): number {
+export function lowerBound(beats: Float32Array, count: number, value: number): number {
   let lo = 0;
   let hi = count;
   while (lo < hi) {
@@ -110,7 +110,7 @@ function lowerBound(beats: Float32Array, count: number, value: number): number {
 }
 
 /** first index with beat > value */
-function upperBound(beats: Float32Array, count: number, value: number): number {
+export function upperBound(beats: Float32Array, count: number, value: number): number {
   let lo = 0;
   let hi = count;
   while (lo < hi) {

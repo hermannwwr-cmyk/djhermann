@@ -18,9 +18,11 @@ export const TEXT = {
 
   startDeck: {
     title: (d: DeckId) => `START DECK ${d}`,
-    /** n = 2, 3 or 4: the beat of the bar that is playing */
-    count: (d: DeckId, n: number) => `Press PLAY on deck ${d} on the count of 1 …  ${n}`,
-    now: (d: DeckId) => `1 — NOW! Press PLAY on deck ${d}`,
+    /** more than a bar to go */
+    ready: (d: DeckId) => `Get ready to press PLAY on deck ${d}. Wait for NOW`,
+    /** k = 4, 3, 2, 1 beats until the next bar line */
+    count: (d: DeckId, k: number) => `Get ready to press PLAY on deck ${d} …  ${k}`,
+    now: (d: DeckId) => `NOW! Press PLAY on deck ${d}`,
     /** the other deck is not running, so there is nothing to count */
     plain: (d: DeckId) => `Press the green PLAY button on deck ${d}`,
     perfect: 'ON THE ONE',
@@ -124,6 +126,7 @@ export const TEXT = {
     perfect: 'WICKED SCRATCH',
     great: 'NICE SCRATCH',
     ok: 'SCRATCHED',
+    letGo: (d: DeckId) => `Nice! Now let go of the record on deck ${d}`,
     fail: 'NO SCRATCH',
   },
 
@@ -167,6 +170,7 @@ export const TEXT = {
     title: (title: string) => title.toUpperCase(),
     mixIn: (n: number) => `MIX IN ${bars(n)}`,
     mixing: (title: string) => `MIXING INTO ${title.toUpperCase()}`,
+    fadeIn: (n: number) => `CROSSFADE IN ${bars(n)}`,
     fading: (d: DeckId) => `FADING TO DECK ${d}`,
     lastTrack: (title: string) => `LAST TRACK · ${title.toUpperCase()}`,
     lastBars: (n: number) => `LAST ${bars(n)}`,

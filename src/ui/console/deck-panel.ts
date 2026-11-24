@@ -192,6 +192,8 @@ export function createDeckPanel(env: PanelEnv, deck: DeckId): Panel {
       sBpm = text(bpm, sBpm, has ? d.bpm.toFixed(2) : '–––.––');
       sPitch = text(pitch, sPitch, formatPitch(d.tempo));
       if (el.classList.contains('dk-empty') === has) el.classList.toggle('dk-empty', !has);
+      const moving = d.playing || d.cuePreview;
+      if (el.classList.contains('dk-playing') !== moving) el.classList.toggle('dk-playing', moving);
 
       // phase meter: where this deck's beats fall against the other deck's
       const running = has && o.track !== null && Math.abs(d.rate) > 0.3 && Math.abs(o.rate) > 0.3;
