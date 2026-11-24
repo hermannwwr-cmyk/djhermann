@@ -83,8 +83,9 @@ export function suggestName(random: () => number = Math.random): string {
 
 /** What we keep of a typed name: no control characters, single spaces, trimmed, at most MAX_NAME_LENGTH. */
 export function cleanName(raw: string): string {
+  // whitespace (tabs, new lines) becomes a space first, then other control characters go
   // eslint-disable-next-line no-control-regex
-  const s = raw.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+  const s = raw.replace(/\s+/g, ' ').replace(/[\u0000-\u001f\u007f]/g, '').trim();
   return [...s].slice(0, MAX_NAME_LENGTH).join('').trim();
 }
 

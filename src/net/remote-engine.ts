@@ -178,7 +178,8 @@ export function createRemoteEngine(deps: RemoteEngineOptions): RemoteEngineImpl 
     const track = loaded[deck]?.meta ?? null;
     const f = followers[deck];
     const tk = ticks[deck];
-    if (!track || !tk) {
+    // before the shared clock is ready, positions in this phone's time would be guesses: hold
+    if (!track || !tk || !room.clockReady) {
       return {
         id: deck,
         track,
@@ -276,7 +277,7 @@ export function createRemoteEngine(deps: RemoteEngineOptions): RemoteEngineImpl 
       };
     },
     positionAt(deck, perfMs) {
-      if (!loaded[deck] || !ticks[deck]) return 0;
+      if (!loaded[deck] || !ticks[deck] || !room.clockReady) return loaded[deck]?.meta.grid.firstBeatSec ?? 0;
       return followers[deck].position(room.perfToShared(perfMs));
     },
 
